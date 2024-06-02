@@ -1,13 +1,30 @@
-class KVStore:
-    def __init__(self):
-        self.store = {}
+from typing import Any, Dict, List, Optional
 
-    def get(self, key):
-        return self.store.get(key)
+class KVStore(dict):
+    def __init__(self) -> None:
+        dict.__init__(self)
+    
+    def get(self, key: str) -> Optional[Any]:
+        return dict.get(self, key)
 
-    def set(self, key, value):
-        self.store[key] = value
+    def set(self, key: str, value: Any) -> None:
+        self[key] = value
 
-    def delete(self, key):
-        if key in self.store:
-            del self.store[key]
+    def delete(self, key: str) -> None:
+        if key in self:
+            del self[key]
+
+    def exists(self, key: str) -> bool:
+        return key in self
+
+    def keys(self) -> List[str]:
+        return list(dict.keys(self))
+
+    def values(self) -> List[Any]:
+        return list(dict.values(self))
+
+    def items(self) -> List[tuple]:
+        return list(dict.items(self))
+
+    def clear(self) -> None:
+        dict.clear(self)

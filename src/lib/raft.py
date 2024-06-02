@@ -1,5 +1,6 @@
 import asyncio
 import json
+import random
 import socket
 import time
 from threading     import Thread
@@ -7,12 +8,16 @@ from xmlrpc.client import ServerProxy
 from typing        import Any, List
 from enum          import Enum
 from .struct       import Address
+import threading
 
 class RaftNode:
     HEARTBEAT_INTERVAL   = 1
     ELECTION_TIMEOUT_MIN = 2
-    ELECTION_TIMEOUT_MAX = 3
+    ELECTION_TIMEOUT_MAX = 5
+    FOLLOWER_TIMEOUT_MIN = 3
+    FOLLOWER_TIMEOUT_MAX = 5
     RPC_TIMEOUT          = 0.5
+    
 
     class NodeType(Enum):
         LEADER    = 1
@@ -29,13 +34,34 @@ class RaftNode:
         self.election_term:       int               = 0
         self.cluster_addr_list:   List[Address]     = []
         self.cluster_leader_addr: Address           = None
+        self.follower_timeout = 0
+        self.candidate_timeout = 0
+        self._stop_event = threading.Event()
+        self._lock = threading.Lock()
+        
         if contact_addr is None:
             self.cluster_addr_list.append(self.address)
-            self.__initialize_as_leader()
+            # self.__initialize_as_leader()
             # self.start_election()
+            self.initialization()
         else:
             self.__try_to_apply_membership(contact_addr)
 
+    def countdown(self, timeout):
+        print("timeout  ", timeout)
+        start_timer = time.time()
+        while time.time() < start_timer + timeout / 1000:
+            if self._stop_event.is_set():
+                break
+            milis = (start_timer + timeout / 1000 - time.time()) * 1000
+            secs, milis = divmod(milis, 1000)
+            timer = '{:02d}:{:02d}'.format(int(secs), int(milis))
+            print("Timeout:", timer)
+            time.sleep(0.1)
+    
+    def random_timeout(self, min: int, max: int) -> int:
+        return min + (max - min) * random.random()
+    
     # Internal Raft Node methods
     def __print_log(self, text: str):
         print(f"[{self.address}] [{time.strftime('%H:%M:%S')}] {text}")
@@ -67,8 +93,6 @@ class RaftNode:
                         "heartbeat": True
                         }, "ping", node_addr)
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
-
-
     
     def __try_to_apply_membership(self, contact_addr: Address):
         self.__print_log(f"Trying to apply membership to {contact_addr}")
@@ -110,20 +134,38 @@ class RaftNode:
             # self.__print_log(f"Error: {e}")
             # return None
 
+    def reset_timeout(self):
+        with self._lock:
+            self.__print_log("Resetting timeout...")
+            self.follower_timeout = 1000
+            self.candidate_timeout = 2000
+            self._stop_event.set()         
+    
+    def initialization(self):
+        # switch case for node type
+        if self.type == RaftNode.NodeType.FOLLOWER:
+            # timeout follower
+            self.__print_log("Starting timeout follower...")
+            # random from follower timeout min to follower timeout max
+            self.follower_timeout = self.random_timeout(RaftNode.FOLLOWER_TIMEOUT_MIN, RaftNode.FOLLOWER_TIMEOUT_MAX)
+            self.countdown(self.follower_timeout)
+            self.__print_log("Follower timeout. Be a candidate...")
+            self.type = RaftNode.NodeType.CANDIDATE
+            self.initialization()
+        elif self.type == RaftNode.NodeType.CANDIDATE:
+            # timeout candidate
+            # choose random from 150 ms to 300 ms
+            
+            self.candidate_timeout = RaftNode.ELECTION_TIMEOUT_MIN + (RaftNode.ELECTION_TIMEOUT_MAX - RaftNode.ELECTION_TIMEOUT_MIN) * random.random()
+            self.start_election()
+            self.countdown(self.candidate_timeout)
+            self.initialization()
+        else:
+            pass
+    
     def start_election(self):
-        # timeout for election
-        election_timeout = time.time() + RaftNode.ELECTION_TIMEOUT_MAX
-        while time.time() < election_timeout:
-            if self.type == RaftNode.NodeType.LEADER:
-                return
-            elif self.type == RaftNode.NodeType.FOLLOWER:
-                return
-            elif self.type == RaftNode.NodeType.CANDIDATE:
-                self.__start_election_round()
-                
-    def __start_election_round(self):
+        self.__print_log("Starting election...")
         self.election_term += 1
-        self.type = RaftNode.NodeType.CANDIDATE
         self.votes_received = 1  # Vote for self
         request = {"term": self.election_term, "candidate_id": self.address}
 
@@ -131,16 +173,19 @@ class RaftNode:
             if node_addr != self.address:
                 response = self.__send_request(request, "request_vote", node_addr)
                 if response["vote_granted"]:
+                    self.__print_log(f"Server {self.address} received vote from {node_addr}")
                     self.votes_received += 1
 
         if self.votes_received > len(self.cluster_addr_list) // 2:
             self.__initialize_as_leader()
-    
+            
     # Inter-node RPCs
     def heartbeat(self, json_request: str) -> "json":
         # TODO : Implement heartbeat
         request = json.loads(json_request)
         self.__print_log(f"Received heartbeat from {request['address']}")
+        # reset timeout
+        self.reset_timeout()
         response = {
             "heartbeat_response": "ack", 
             "address": {

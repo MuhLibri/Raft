@@ -24,14 +24,14 @@ class RaftNode:
         FOLLOWER  = 3
 
     # Public Raft Node methods
-    def __init__(self, application : Any, addr: Address, contact_addr: Address = None):
+    def __init__(self, application : Any, addr: Address, contact_addr: Address = None, address_list: List[Address] = []):
         socket.setdefaulttimeout(RaftNode.RPC_TIMEOUT)
         self.address:             Address           = addr
         self.type:                RaftNode.NodeType = RaftNode.NodeType.FOLLOWER
         self.log:                 List[str, str]    = []
         self.app:                 Any               = application
         self.election_term:       int               = 0
-        self.cluster_addr_list:   List[Address]     = []
+        self.cluster_addr_list:   List[Address]     = address_list
         self.cluster_leader_addr: Address           = None
         self.follower_timeout = 0
         self.candidate_timeout = 0
@@ -41,7 +41,7 @@ class RaftNode:
         self.current_term:        int               = 0
         
         if contact_addr is None:
-            self.cluster_addr_list.append(self.address)
+            # self.cluster_addr_list.append(self.address)
             self.__print_log(f"Cluster Addr List: {self.cluster_addr_list}")
             self.initialization()
         else:
@@ -103,7 +103,7 @@ class RaftNode:
                         "prev_log_index": prev_log_index,
                         "prev_log_term": prev_log_term,
                         "entry": entries
-                        }, "ping", node_addr)
+                        }, "heartbeat", node_addr)
                     self.log.append(entries[0])
                     self.commit_index += 1
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)

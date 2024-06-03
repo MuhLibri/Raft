@@ -1,9 +1,14 @@
+from typing import List
 class Address(dict):
+    # create static list of addresses
+    addresses = []
     def __init__(self, ip: str, port: int):
         dict.__init__(self, ip=ip, port=port)
         self.ip   = ip
         self.port = port
-    
+        # if self not in Address.addresses:
+        Address.addresses.append(self)
+                
     def __str__(self):
         return f"{self.ip}:{self.port}"
     

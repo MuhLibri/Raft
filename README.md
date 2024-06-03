@@ -28,16 +28,16 @@ Raft is a consensus algorithm designed as an alternative to Paxos. It was meant 
     ```bash
     make run-client
     ```
-4.
+4. The Client and Server are now running. You can input your command to the client terminal
 
 
 ## Contributors
 
-| NIM      | Nama                 | Contributions                                                        |
-| -------- | -------------------- | -------------------------------------------------------------------- |
-| 13521043 | Nigel Sahl           | Base Functionality, Heartbeat, Leader Election, makefile and bat     |
-| 13521047 | M Equilibri Fajrin   | Membership change                                                    |
-| 13521048 | M Farrel Danendra R  | Log Replication                                                      |
-| 13521058 | Ghazi Akmal Fauzan   | Management Dashboard, CLI format, Execute, Client                    |
-| 13521070 | Akmal Mahardika NP   | Client, Transaction                                                  |
+| NIM      | Nama                           | Contributions                                                        |
+| -------- | ------------------------------ | -------------------------------------------------------------------- |
+| 13521043 | Nigel Sahl                     | Base Functionality, Heartbeat, Leader Election, makefile and bat     |
+| 13521047 | Muhammad Equilibrie Fajria     | Membership change                                                    |
+| 13521048 | M Farrel Danendra Rachim       | Log Replication                                                      |
+| 13521058 | Ghazi Akmal Fauzan             | Management Dashboard, CLI format, Execute, Client                    |
+| 13521070 | Akmal Mahardika Nurwahyu P     | Client, Transaction                                                  |
 

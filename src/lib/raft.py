@@ -37,6 +37,8 @@ class RaftNode:
         self.candidate_timeout = 0
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
+        self.commit_index:        int               = -1
+        self.current_term:        int               = 0
         
         if contact_addr is None:
             self.cluster_addr_list.append(self.address)
@@ -89,11 +91,21 @@ class RaftNode:
             self.__print_log(f"Cluster Addr List: {self.cluster_addr_list}")
             for node_addr in self.cluster_addr_list:
                 if node_addr != self.address:
+                    prev_log_index = len(self.log) - 1
+                    prev_log_term = self.log[prev_log_index][0] if prev_log_index >= 0 else None
+                    entries = [(self.election_term, f"entry-{len(self.log)}")]
                     self.__print_log(f"[Leader] Sending heartbeat to {node_addr}")
                     self.__send_request({
                         "address": self.address,
-                        "heartbeat": True
+                        "heartbeat": True,
+                        "commit_index": self.commit_index,
+                        "term": self.election_term,
+                        "prev_log_index": prev_log_index,
+                        "prev_log_term": prev_log_term,
+                        "entry": entries
                         }, "ping", node_addr)
+                    self.log.append(entries[0])
+                    self.commit_index += 1
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
     
     def __try_to_apply_membership(self, contact_addr: Address) -> bool:

@@ -14,8 +14,8 @@ class RaftNode:
     HEARTBEAT_INTERVAL   = 1
     ELECTION_TIMEOUT_MIN = 3000
     ELECTION_TIMEOUT_MAX = 5000
-    FOLLOWER_TIMEOUT_MIN = 3000
-    FOLLOWER_TIMEOUT_MAX = 4000
+    FOLLOWER_TIMEOUT_MIN = 2000
+    FOLLOWER_TIMEOUT_MAX = 3000
     RPC_TIMEOUT          = 0.5
     
     class NodeType(Enum):
@@ -42,6 +42,7 @@ class RaftNode:
             self.__print_log(f"Cluster Addr List: {self.cluster_addr_list}")
             self.initialization()
         else:
+            self.cluster_addr_list.append(self.address)
             self.__try_to_apply_membership(contact_addr)
     
     def random_timeout(self, min: int, max: int) -> int:
@@ -125,6 +126,7 @@ class RaftNode:
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
     
     def __try_to_apply_membership(self, contact_addr: Address) -> bool:
+        time.sleep(RaftNode.FOLLOWER_TIMEOUT_MAX / 1000)
         self.__print_log(f"Trying to apply membership to {contact_addr}")
         redirected_addr = contact_addr
         response = {

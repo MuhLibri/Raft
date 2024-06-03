@@ -156,18 +156,19 @@ class RaftNode:
 
     def __send_request(self, request: Any, rpc_name: str, addr: Address) -> "json":
         # Warning : This method is blocking
-        # try:
-        node         = ServerProxy(f"http://{addr.ip}:{addr.port}")
-        json_request = json.dumps(request)
-        rpc_function = getattr(node, rpc_name)
-        self.__print_log(f"JSON Request: {json_request}")
-        response     = json.loads(rpc_function(json_request))
-        self.__print_log(f"Request: {request}")
-        self.__print_log(f"Response: {response}")
-        return response
-        # except Exception as e:   
-            # self.__print_log(f"Error: {e}")
-            # return None       
+        try:
+            node         = ServerProxy(f"http://{addr.ip}:{addr.port}")
+            json_request = json.dumps(request)
+            rpc_function = getattr(node, rpc_name)
+            self.__print_log(f"JSON Request: {json_request}")
+            response     = json.loads(rpc_function(json_request))
+            self.__print_log(f"Request: {request}")
+            self.__print_log(f"Response: {response}")
+            return response
+
+        except Exception as e: 
+            self.__print_log(f"Error: {e}")
+            return None
     
     def initialization(self):
         # switch case for node type
@@ -200,6 +201,10 @@ class RaftNode:
             if node_addr != self.address:
                 self.__print_log(f"Sending request vote to {node_addr}")
                 response = self.__send_request(request, "request_vote", node_addr)
+                if response == None:
+                    # erase node from cluster_addr_list
+                    self.cluster_addr_list.remove(node_addr)
+                    continue
                 if response["vote_granted"]:
                     self.__print_log(f"Server {self.address} received vote from {node_addr}")
                     self.votes_received += 1

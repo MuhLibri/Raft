@@ -38,11 +38,12 @@ if __name__ == "__main__":
     contact_addr = None
     
     # read the address_list from the file
-    # if the 4th argument is not membership then
-    if sys.argv[3] != "membership":
+    # if the last argument is not membership, then read the address_list
+    if sys.argv[-1] != "membership":
         address_list = read_address_list("src\\address.txt")
     server_addr = Address(sys.argv[1], int(sys.argv[2]))
-    if len(sys.argv) == 5:
+    if len(sys.argv) == 6:
+        print("Contact Address:", sys.argv[3], sys.argv[4])
         contact_addr = Address(sys.argv[3], int(sys.argv[4]))
 
     start_serving(server_addr, contact_addr, address_list)

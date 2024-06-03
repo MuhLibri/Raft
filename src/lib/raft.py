@@ -170,8 +170,8 @@ class RaftNode:
         elif self.type == RaftNode.NodeType.CANDIDATE:
             # timeout candidate
             # choose random from 150 ms to 300 ms
-            
             self.candidate_timeout = RaftNode.ELECTION_TIMEOUT_MIN + (RaftNode.ELECTION_TIMEOUT_MAX - RaftNode.ELECTION_TIMEOUT_MIN) * random.random()
+            self.__print_log(f"Starting timeout candidate... {self.candidate_timeout}")
             self.start_election()
             self.countdown(self.candidate_timeout)
             self.initialization()
@@ -188,6 +188,7 @@ class RaftNode:
 
         for node_addr in self.cluster_addr_list:
             if node_addr != self.address:
+                self.__print_log(f"Sending request vote to {node_addr}")
                 response = self.__send_request(request, "request_vote", node_addr)
                 if response["vote_granted"]:
                     self.__print_log(f"Server {self.address} received vote from {node_addr}")

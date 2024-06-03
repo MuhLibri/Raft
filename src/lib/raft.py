@@ -38,7 +38,6 @@ class RaftNode:
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
         self.commit_index:        int               = -1
-        self.current_term:        int               = 0
         
         if contact_addr is None:
             self.cluster_addr_list.append(self.address)
@@ -217,6 +216,10 @@ class RaftNode:
     def ping(self, json_request: str) -> "json":
         request = json.loads(json_request)
         self.__print_log(f"Received ping from {request['address']}")
+        success = self.append_entries(request['term'], request['address'], request['prev_log_index'], request['prev_log_term'], request['entry'], request['commit_index'])
+        if success:
+            self.log.append(request['entry'][0])
+            self.commit_index += 1
         response = {
             "status": "success", 
             "ping_response": "pong",
@@ -225,6 +228,22 @@ class RaftNode:
                 "port": self.address.port}}
         return json.dumps(response)
     
+    def append_entries(self, term, prev_log_index, prev_log_term, entry, commit_index):
+        if term < self.election_term:
+            return False
+        
+        self.election_term = term
+        
+        if prev_log_index >= 0 and (prev_log_index >= len(self.log) or self.log[prev_log_index][0] != prev_log_term):
+            return False
+        
+        self.log = self.log[:prev_log_index + 1] + entry
+        
+        if commit_index > self.commit_index:
+            self.commit_index = min(commit_index, len(self.log) - 1)
+        
+        return True
+
     def request_vote(self, json_request: str) -> "json":
         request = json.loads(json_request)
         vote_granted = False

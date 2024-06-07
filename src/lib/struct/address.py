@@ -11,6 +11,9 @@ class Address(dict):
     def __iter__(self):
         return iter((self.ip, self.port))
     
+    def __hash__(self):
+        return hash((self.ip, self.port))
+    
     def __eq__(self, other):
         return self['ip'] == other['ip'] and self['port'] == other['port']
     

@@ -108,14 +108,16 @@ class RaftNode:
             self.__print_log(f"Cluster Addr List: {self.cluster_addr_list}")
             ack_count = 0
             responses = []
-            
+
             for node_addr in self.cluster_addr_list:
                 if node_addr != self.address:
                     prev_log_index = len(self.log) - 1
                     prev_log_term = self.log[prev_log_index][0] if prev_log_index >= 0 else None
                     entries = [(self.election_term, f"entry-{len(self.log)}")]
-                    self.__print_log(f"[Leader] Sending {func} to {node_addr}")
+                    self.__print_log(f"[Leader] Sending {func} to {node_addr} with entries: {entries}")
+                    
                     response = self.__send_request({
+                        "log": self.log,
                         "address": self.address,
                         "heartbeat": True,
                         "cluster_addr_list": self.cluster_addr_list,
@@ -128,26 +130,22 @@ class RaftNode:
                         "arguments": args
                     }, "heartbeat" if func == "heartbeat" else "follower_execute", node_addr)
                     responses.append(response)
-                    
+
                     if response:
-                        # Update match index based on response
-                        self.match_index[node_addr] = prev_log_index + len(entries)
                         if response.get("status") == "success":
                             ack_count += 1
-                        
-                    self.log.append(entries[0])
-                    self.commit_index += 1
-            
-            # Check if all followers have acknowledged
-            if func != "heartbeat":
-                if ack_count > len(self.cluster_addr_list) // 2:
-                    self.__print_log("Enough acks. Committing...")
-                    return True
-                else:
-                    self.__print_log("Not enough acks. Aborting...")
-                    return False
-            
+                            self.match_index[node_addr] = prev_log_index + len(entries)
+                        else:
+                            self.__print_log(f"Received error from {node_addr}: {response.get('error')}")
+
+            # Ensure entries are committed if a majority of followers have acknowledged
+            if ack_count > len(self.cluster_addr_list) // 2:
+                self.__print_log(f"Entries committed. Acknowledged by majority of followers.")
+                self.log.append(entries[0])
+                self.commit_index += 1
+
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
+
     
     def __try_to_apply_membership(self, contact_addr: Address) -> bool:
         time.sleep(RaftNode.FOLLOWER_TIMEOUT_MAX / 1000)
@@ -249,7 +247,9 @@ class RaftNode:
             entries = request['entry']
             prev_log_index = request['prev_log_index']
             prev_log_term = request['prev_log_term']
-            if prev_log_index == -1 or (len(self.log) > prev_log_index and self.log[prev_log_index][0] == prev_log_term):
+            
+            # Check if prev_log_index is within the bounds of self.log
+            if prev_log_index == -1 or (0 <= prev_log_index < len(self.log) and self.log[prev_log_index][0] == prev_log_term):
                 self.log = self.log[:prev_log_index + 1] + entries
                 if request['commit_index'] > self.commit_index:
                     self.commit_index = min(request['commit_index'], len(self.log) - 1)
@@ -259,7 +259,7 @@ class RaftNode:
                 success = False
         else:
             success = False
-        
+
         if success:
             response = {
                 "status": "success",
@@ -274,6 +274,7 @@ class RaftNode:
             }
 
         return json.dumps(response)
+
     
     def append_entries(self, term, prev_log_index, prev_log_term, entry, commit_index):
         if term < self.election_term:
@@ -281,15 +282,15 @@ class RaftNode:
         
         self.election_term = term
         
-        if prev_log_index >= 0 and (prev_log_index >= len(self.log) or self.log[prev_log_index][0] != prev_log_term):
+        # Fix bounds check here
+        if prev_log_index == -1 or (prev_log_index >= 0 and prev_log_index < len(self.log) and self.log[prev_log_index][0] == prev_log_term):
+            self.log = self.log[:prev_log_index + 1] + entry
+            if commit_index > self.commit_index:
+                self.commit_index = min(commit_index, len(self.log) - 1)
+            return True
+        else:
             return False
-        
-        self.log = self.log[:prev_log_index + 1] + entry
-        
-        if commit_index > self.commit_index:
-            self.commit_index = min(commit_index, len(self.log) - 1)
-        
-        return True
+
 
     def request_vote(self, json_request: str) -> "json":
         request = json.loads(json_request)

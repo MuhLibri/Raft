@@ -8,6 +8,7 @@ from xmlrpc.client import ServerProxy
 from typing        import Any, List, Tuple, Dict
 from enum          import Enum
 from .struct       import Address
+from .struct       import KVStore
 import threading
 
 class RaftNode:
@@ -24,17 +25,18 @@ class RaftNode:
         FOLLOWER  = 3
 
     # Public Raft Node methods
-    def __init__(self, application : Any, addr: Address, contact_addr: Address = None, address_list: List[Address] = []):
+    def __init__(self, store : KVStore, addr: Address, contact_addr: Address = None, address_list: List[Address] = []):
         socket.setdefaulttimeout(RaftNode.RPC_TIMEOUT)
         self.address:             Address           = addr
         self.type:                RaftNode.NodeType = RaftNode.NodeType.FOLLOWER
         self.log:                 List[Tuple[int, str]] = []
         self.app:                 Any               = application
+        self.store:               KVStore           = store
         self.election_term:       int               = 0
         self.cluster_addr_list:   List[Address]     = address_list
         self.cluster_leader_addr: Address           = None
-        self._stop_event = threading.Event()
-        self._lock = threading.Lock()
+        self._stop_event                            = threading.Event()
+        self._lock                                  = threading.Lock()
         self.commit_index:        int               = -1
         self.match_index:         Dict[Address, int] = {}
 
@@ -81,7 +83,6 @@ class RaftNode:
         self._thread.start()
 
     # Internal Raft Node methods
-    
     def __print_log(self, text: str, end='\n'):
         print(f"[{self.address}] [{time.strftime('%H:%M:%S')}] {text}", end=end)
 
@@ -89,6 +90,7 @@ class RaftNode:
         self.__print_log("Initialize as leader node...")
         self.cluster_leader_addr = self.address
         self.type                = RaftNode.NodeType.LEADER
+
         for addr in self.cluster_addr_list:
             if addr != self.address:
                 # Initialize match index for each follower
@@ -105,10 +107,8 @@ class RaftNode:
         self.heartbeat_thread.start()
 
     async def __leader_heartbeat(self):
-        # TODO : Send periodic heartbeat
         while True:
             self.__print_log("[Leader] Sending heartbeat...")
-            # print cluster_addr_list
             self.__print_log(f"Cluster Addr List: {self.cluster_addr_list}")
             for node_addr in self.cluster_addr_list:
                 if node_addr != self.address:
@@ -156,13 +156,14 @@ class RaftNode:
         self.cluster_leader_addr = redirected_addr
         self.__print_log(f"Membership applied successfully. Cluster Leader: {self.cluster_leader_addr}")
         self.initialization()
+
         return True
     
     # # nyalain heartbeat
         # self.heartbeat_thread = Thread(target=asyncio.run,args=[self.__follower_heartbeat()])
         # self.heartbeat_thread.start()
 
-    def __send_request(self, request: Any, rpc_name: str, addr: Address) -> "json":
+    def __send_request(self, request: str, rpc_name: str, addr: Address) -> "json":
         # Warning : This method is blocking
         try:
             node         = ServerProxy(f"http://{addr.ip}:{addr.port}")
@@ -185,15 +186,11 @@ class RaftNode:
             self.__print_log("Starting timeout follower...")
             # random from follower timeout min to follower timeout max
             self.start_countdown(RaftNode.FOLLOWER_TIMEOUT_MIN, RaftNode.FOLLOWER_TIMEOUT_MAX)
-            # self.__print_log("Follower timeout. Be a candidate...")
-            # self.type = RaftNode.NodeType.CANDIDATE
-            # self.initialization()
         elif self.type == RaftNode.NodeType.CANDIDATE:
             # timeout candidate
             # choose random from 150 ms to 300 ms
             self.start_election()
             self.start_countdown(RaftNode.ELECTION_TIMEOUT_MIN, RaftNode.ELECTION_TIMEOUT_MAX)
-            # self.initialization()
         else:
             # stop countdown
             self.__print_log("Stopping countdown...")
@@ -226,7 +223,6 @@ class RaftNode:
     
     # Inter-node RPCs
     def heartbeat(self, json_request: str) -> "json":
-        # TODO : Implement heartbeat
         request = json.loads(json_request)
         self.__print_log(f"Received heartbeat from {request['address']}")
         # reset timeout
@@ -326,5 +322,100 @@ class RaftNode:
     # Client RPCs
     def execute(self, json_request: str) -> "json":
         request = json.loads(json_request)
-        response = {"status": "success"}
+        function_name = request.get("function_name")
+        if function_name:
+            function_args = request.get("arguments", [])
+            if hasattr(self, function_name):
+                function = getattr(self, function_name)
+                return function(*function_args)
+            else:
+                return {"error": f"Function '{function_name}' not found in RaftNode class"}
+        else:
+            return {"error": "No function name provided in request"}
+    
+    def ping(self) -> "json":
+
+        response = {
+            "status": "success", 
+            "value": self.store.ping()
+        }
+                
+        return json.dumps(response)
+    
+    def get(self, key: str) -> "json":
+        value = self.store.get(key)
+
+        if value is None:
+            response = {
+                "status": "error", 
+                "error": "Key not found"
+            }
+        else:
+            response = {
+                "status": "success", 
+                "value": value
+            }
+        
+        return json.dumps(response)
+    
+    def set(self, key: str, value: str) -> "json":
+        status = self.store.set(key, value)
+        
+        if status is None:
+            response = {
+                "status": "error", 
+                "error": "Key not found"
+            }
+        else:
+            response = {
+                "status": status
+            }
+        
+        return json.dumps(response)
+    
+    def strln(self, key: str) -> "json":
+        value = self.store.strln(key)
+        
+        if value is None:
+            response = {
+                "status": "error", 
+                "error": "Key not found"
+            }
+        else:
+            response = {
+                "status": "success", 
+                "value": value
+            }
+        
+        return json.dumps(response)
+    
+    def delete(self, key: str) -> "json":
+        status = self.store.delete(key)
+        
+        if status is None:
+            response = {
+                "status": "error", 
+                "error": "Key not found"
+            }
+        else:
+            response = {
+                "status": "success",
+                "value": status
+            }
+        
+        return json.dumps(response)
+    
+    def append(self, key: str, value: str) -> "json":
+        status = self.store.append(key, value)
+        
+        if status is None:
+            response = {
+                "status": "error", 
+                "error": "Error appending value"
+            }
+        else:
+            response = {
+                "status": status
+            }
+        
         return json.dumps(response)

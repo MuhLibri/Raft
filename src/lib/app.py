@@ -1,4 +1,3 @@
-import sys
 import json
 
 class App:
@@ -7,61 +6,55 @@ class App:
         self.server = server
         self.server_addr = server_addr
 
-    def run(self):
-        while True:
-            command = input("Enter command: ").strip().split()
-            if not command:
-                continue
-
-            cmd = command[0].lower()
-            args = command[1:]
-
-            if cmd == "ping":
-                self.ping()
-            elif cmd == "get" and len(args) == 1:
-                self.get(args[0])
-            elif cmd == "set" and len(args) == 2:
-                self.set(args[0], args[1])
-            elif cmd == "strln" and len(args) == 1:
-                self.strln(args[0])
-            elif cmd == "delete" and len(args) == 1:
-                self.delete(args[0])
-            elif cmd == "append" and len(args) == 2:
-                self.append(args[0], args[1])
-            elif cmd == "shutdown":
-                self.shutdown()
-                break
-            else:
-                print("Invalid command or arguments")
-
-    def ping(self):
+    def execute_request(self, function_name, *args):
         if self.server:
             request = {
-                "address": {
-                    "ip": self.server_addr.ip,
-                    "port": self.server_addr.port
-                }
+                "function_name": function_name,
+                "arguments": args
             }
-            response = self.server.ping(json.dumps(request))
-            print(f"Ping response: {response}")
+            response = self.server.execute(json.dumps(request))
+            return json.loads(response)
         else:
-            print({"status": "pong"})
+            return {"error": "Server not available"}
+
+    def ping(self):
+        response = self.execute_request("ping")
+        if response.get("error"):
+            print(response["error"], "\n")
+        else:
+            print(response["value"], "\n")
 
     def get(self, key):
-        pass
+        response = self.execute_request("get", key)
+        if response.get("error"):
+            print(response["error"], "\n")
+        else:
+            print(response["value"], "\n")
 
     def set(self, key, value):
-        pass
+        response = self.execute_request("set", key, value)
+        if response.get("error"):
+            print(response["error"], "\n")
+        else:
+            print(response["status"], "\n")
 
     def strln(self, key):
-        pass
+        response = self.execute_request("strln", key)
+        if response.get("error"):
+            print(response["error"], "\n")
+        else:
+            print(response["value"], "\n")
 
     def delete(self, key):
-        pass
+        response = self.execute_request("delete", key)
+        if response.get("error"):
+            print(response["error"], "\n")
+        else:
+            print(response["value"], "\n")
 
     def append(self, key, value):
-        pass
-
-    def shutdown(self):
-        print("Shutting down...")
-        sys.exit(0)
+        response = self.execute_request("append", key, value)
+        if response.get("error"):
+            print(response["error"], "\n")
+        else:
+            print(response["status"], "\n")

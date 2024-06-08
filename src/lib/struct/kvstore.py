@@ -1,30 +1,42 @@
-from typing import Any, Dict, List, Optional
+class KVStore:
+    def __init__(self):
+        self.store = {}
 
-class KVStore(dict):
-    def __init__(self) -> None:
-        dict.__init__(self)
-    
-    def get(self, key: str) -> Optional[Any]:
-        return dict.get(self, key)
+    def ping(self):
+        return "PONG"
 
-    def set(self, key: str, value: Any) -> None:
-        self[key] = value
+    def get(self, key):
+        return self.store.get(key, None)
 
-    def delete(self, key: str) -> None:
-        if key in self:
-            del self[key]
+    def set(self, key, value):
+        if key in self.store:
+            self.store[key] = value
+            return "OK"
+        else:
+            return None
 
-    def exists(self, key: str) -> bool:
-        return key in self
+    def strln(self, key):
+        value = self.store.get(key, None)
+        if value is None:
+            return None
+        return len(value)
 
-    def keys(self) -> List[str]:
-        return list(dict.keys(self))
+    def delete(self, key):
+        if key in self.store:
+            del self.store[key]
+            return "OK"
+        return None
 
-    def values(self) -> List[Any]:
-        return list(dict.values(self))
-
-    def items(self) -> List[tuple]:
-        return list(dict.items(self))
-
-    def clear(self) -> None:
-        dict.clear(self)
+    def append(self, key, value):
+        if key in self.store:
+            if value is None:
+                self.store[key] += ""
+            else:
+                self.store[key] += value
+            return "OK"
+        else:
+            if value is None:
+                self.store[key] = ""
+            else:
+                self.store[key] = str(value)
+            return "OK"

@@ -118,6 +118,7 @@ class RaftNode:
                     response = self.__send_request({
                         "address": self.address,
                         "heartbeat": True,
+                        "cluster_addr_list": self.cluster_addr_list,
                         "commit_index": self.commit_index,
                         "term": self.election_term,
                         "prev_log_index": prev_log_index,
@@ -236,7 +237,10 @@ class RaftNode:
         request = json.loads(json_request)
 
         self.__print_log(f"Received heartbeat from {request['address']}")
-        
+        self.__print_log(f"Current cluster address list: {request['cluster_addr_list']}")
+        # Assign cluster_leader_addr
+        self.cluster_addr_list = request['cluster_addr_list']
+
         # reset timeout
         term = request['term']
         if term >= self.election_term:

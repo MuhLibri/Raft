@@ -5,7 +5,7 @@ import socket
 import time
 from threading     import Thread
 from xmlrpc.client import ServerProxy
-from typing        import List
+from typing        import Any, List, Tuple, Dict
 from enum          import Enum
 from .struct       import Address
 from .struct       import KVStore
@@ -29,7 +29,8 @@ class RaftNode:
         socket.setdefaulttimeout(RaftNode.RPC_TIMEOUT)
         self.address:             Address           = addr
         self.type:                RaftNode.NodeType = RaftNode.NodeType.FOLLOWER
-        self.log:                 List[str, str]    = []
+        self.log:                 List[Tuple[int, str]] = []
+        self.app:                 Any               = application
         self.store:               KVStore           = store
         self.election_term:       int               = 0
         self.cluster_addr_list:   List[Address]     = address_list
@@ -37,8 +38,10 @@ class RaftNode:
         self._stop_event                            = threading.Event()
         self._lock                                  = threading.Lock()
         self.commit_index:        int               = -1
-        
+        self.match_index:         Dict[Address, int] = {}
+
         if contact_addr is None:
+             # self.cluster_addr_list.append(self.address)
             self.__print_log(f"Cluster Addr List: {self.cluster_addr_list}")
             self.initialization()
         else:
@@ -52,7 +55,7 @@ class RaftNode:
         with self._lock:
             self.__print_log("Resetting timeout...")
             self._stop_event.set()  
-            
+    
     def countdown(self, timeout_min, timeout_max) -> bool:
         while True:
             self._stop_event.clear()
@@ -79,6 +82,7 @@ class RaftNode:
         self._thread = threading.Thread(target=self.countdown, args=(timeout_countdown_min, timeout_countdown_max))
         self._thread.start()
 
+    # Internal Raft Node methods
     def __print_log(self, text: str, end='\n'):
         print(f"[{self.address}] [{time.strftime('%H:%M:%S')}] {text}", end=end)
 
@@ -86,14 +90,20 @@ class RaftNode:
         self.__print_log("Initialize as leader node...")
         self.cluster_leader_addr = self.address
         self.type                = RaftNode.NodeType.LEADER
-        request = {
-            "cluster_leader_addr": self.address
-        }
+
+        for addr in self.cluster_addr_list:
+            if addr != self.address:
+                # Initialize match index for each follower
+                self.match_index[addr] = -1  
+        
+        # TODO : Inform to all node this is new leader
+
+        request = {"cluster_leader_addr": self.address}
         for node_addr in self.cluster_addr_list:
             if node_addr != self.address:
                 self.__send_request(request, "notify_leader", node_addr)
         
-        self.heartbeat_thread = Thread(target=asyncio.run,args=[self.__leader_heartbeat()])
+        self.heartbeat_thread = threading.Thread(target=asyncio.run, args=[self.__leader_heartbeat()])
         self.heartbeat_thread.start()
 
     async def __leader_heartbeat(self):
@@ -106,7 +116,7 @@ class RaftNode:
                     prev_log_term = self.log[prev_log_index][0] if prev_log_index >= 0 else None
                     entries = [(self.election_term, f"entry-{len(self.log)}")]
                     self.__print_log(f"[Leader] Sending heartbeat to {node_addr}")
-                    self.__send_request({
+                    response = self.__send_request({
                         "address": self.address,
                         "heartbeat": True,
                         "commit_index": self.commit_index,
@@ -114,7 +124,10 @@ class RaftNode:
                         "prev_log_index": prev_log_index,
                         "prev_log_term": prev_log_term,
                         "entry": entries
-                        }, "heartbeat", node_addr)
+                    }, "heartbeat", node_addr)
+                    if response:
+                        # Update match index based on response
+                        self.match_index[node_addr] = prev_log_index + len(entries)  
                     self.log.append(entries[0])
                     self.commit_index += 1
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
@@ -145,6 +158,10 @@ class RaftNode:
         self.initialization()
 
         return True
+    
+    # # nyalain heartbeat
+        # self.heartbeat_thread = Thread(target=asyncio.run,args=[self.__follower_heartbeat()])
+        # self.heartbeat_thread.start()
 
     def __send_request(self, request: str, rpc_name: str, addr: Address) -> "json":
         # Warning : This method is blocking
@@ -182,7 +199,8 @@ class RaftNode:
     def start_election(self):
         self.__print_log("Starting election...")
         self.election_term += 1
-        self.votes_received = 1  # Vote for self
+        # Vote for self
+        self.votes_received = 1  
         request = {"term": self.election_term, "candidate_id": self.address}
 
         for node_addr in self.cluster_addr_list:
@@ -202,15 +220,50 @@ class RaftNode:
             self.__print_log(f"Server {self.address} is elected as leader")
             self.__initialize_as_leader()
             self.initialization()
-            
+    
     # Inter-node RPCs
     def heartbeat(self, json_request: str) -> "json":
         request = json.loads(json_request)
         self.__print_log(f"Received heartbeat from {request['address']}")
         # reset timeout
-        self.reset_timeout()
+        term = request['term']
+        if term >= self.election_term:
+            self.reset_timeout()
+            self.type = RaftNode.NodeType.FOLLOWER
+            entries = request['entry']
+            prev_log_index = request['prev_log_index']
+            prev_log_term = request['prev_log_term']
+            if prev_log_index == -1 or (len(self.log) > prev_log_index and self.log[prev_log_index][0] == prev_log_term):
+                self.log = self.log[:prev_log_index + 1] + entries
+                if request['commit_index'] > self.commit_index:
+                    self.commit_index = min(request['commit_index'], len(self.log) - 1)
+                self.__print_log(f"Appended entries to log: {entries}")
+                success = True
+            else:
+                success = False
+        else:
+            success = False
+        
         response = {
-            "heartbeat_response": "ack", 
+            "success": success,
+            "term": self.election_term,
+            "match_index": len(self.log) - 1
+        }
+        return json.dumps(response)
+
+    def ping(self, json_request: str) -> "json":
+        request = json.loads(json_request)
+        self.__print_log(f"Received ping from {request['address']}")
+        success = self.append_entries(request['term'], request['prev_log_index'], request['prev_log_term'], request['entry'], request['commit_index'])
+        self.__print_log(request)
+        
+        if success:
+            self.log.append(request['entry'][0])
+            self.commit_index += 1
+            
+        response = {
+            "status": "success", 
+            "ping_response": "pong",
             "address": {
                 "ip": self.address.ip, 
                 "port": self.address.port}}

@@ -139,7 +139,7 @@ class RaftNode:
             
             # Check if all followers have acknowledged
             if func != "heartbeat":
-                if ack_count == len(self.cluster_addr_list) - 1:
+                if ack_count > len(self.cluster_addr_list) // 2:
                     self.__print_log("All followers acknowledged the task")
                     return True
                 else:

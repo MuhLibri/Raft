@@ -12,10 +12,10 @@ from .struct       import KVStore
 
 class RaftNode:
     HEARTBEAT_INTERVAL   = 1
-    ELECTION_TIMEOUT_MIN = 3000
-    ELECTION_TIMEOUT_MAX = 5000
-    FOLLOWER_TIMEOUT_MIN = 2000
-    FOLLOWER_TIMEOUT_MAX = 3000
+    ELECTION_TIMEOUT_MIN = 1000
+    ELECTION_TIMEOUT_MAX = 2000
+    FOLLOWER_TIMEOUT_MIN = 500
+    FOLLOWER_TIMEOUT_MAX = 1000
     RPC_TIMEOUT          = 0.5
     
     class NodeType(Enum):
@@ -113,7 +113,7 @@ class RaftNode:
         while True:
             self.__print_log(f"[Leader] Sending {func}...")
             self.__print_log(f"[Leader] Cluster Addr List: {self.cluster_addr_list}")
-            ack_count = 0
+            ack_count = 1
             responses = []
 
             for node_addr in self.cluster_addr_list:

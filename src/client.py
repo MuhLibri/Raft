@@ -37,12 +37,14 @@ if __name__ == "__main__":
 
         try:
             response = json.loads(server.connect())
+            address_list.clear()
             for addr in response["list"]:
                 address_list.append(Address(addr["ip"], addr["port"]))
         except Exception as e:            
-            address_list = [addr for addr in address_list if addr.__str__ != app.server_addr.__str__]
-            app.server_addr = address_list[0]
-            app.server = ServerProxy(f"http://{app.server_addr.ip}:{app.server_addr.port}")
+            address_list.remove(server_addr)
+            app.handle_leader_redirect(address_list[0].__str__())
+            server_addr = address_list[0]
+            server = ServerProxy(f"http://{server_addr.ip}:{server_addr.port}")
 
         if cmd == "ping":
             app.ping()

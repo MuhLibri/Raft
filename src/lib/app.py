@@ -16,7 +16,10 @@ class App:
             }
             response = self.__call_method("execute", json.dumps(request))
             try:
-                return json.loads(response)
+                if isinstance(response, str):
+                    return json.loads(response)
+                else:
+                    return response
             except json.JSONDecodeError:
                 return {"error": "Invalid response from server"}
         else:
@@ -29,13 +32,13 @@ class App:
                 return func(*params)
             except xmlrpc.client.Fault as fault:
                 if fault.faultCode == 505:
-                    self.__handle_leader_redirect(fault.faultString)
+                    self.handle_leader_redirect(fault.faultString)
                 else:
                     return {"error": "Error connecting to " + fault.faultString}
             except Exception as e:
                 return {"error": f"Error calling method {method}: {e}"}
 
-    def __handle_leader_redirect(self, leader_addr):
+    def handle_leader_redirect(self, leader_addr):
         ip, port = leader_addr.split(':')
         self.server_addr = Address(ip, int(port))
         self.server = xmlrpc.client.ServerProxy(f"http://{self.server_addr.ip}:{self.server_addr.port}")

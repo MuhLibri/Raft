@@ -280,7 +280,7 @@ class RaftNode:
         self.__print_log(f"Received heartbeat from {request['address']}")
         self.__print_log(f"Current cluster address list: {request['cluster_addr_list']}")
         # Assign cluster_leader_addr
-        self.cluster_addr_list = request['cluster_addr_list']
+        # self.cluster_addr_list = request['cluster_addr_list']
 
         # reset timeout
         term = request['term']
@@ -361,10 +361,24 @@ class RaftNode:
         request = json.loads(json_request)
         self.cluster_addr_list.append(Address(request["ip"], request["port"]))
         self.__print_log(f"Updated cluster_addr_list: {self.cluster_addr_list}")
+
+        # Apply leader cluster list to all nodes
+        for node_addr in self.cluster_addr_list:
+            if node_addr != self.address:
+                updated_cluster_request = {"cluster_addr_list": self.cluster_addr_list}
+                self.__send_request(updated_cluster_request, "update_cluster_addr_list", node_addr)
+
         response = {
             "status": "success", 
             "log": self.log, 
             "cluster_addr_list": self.cluster_addr_list}
+        return json.dumps(response)
+    
+    def update_cluster_addr_list(self, json_request: str) -> "json":
+        request = json.loads(json_request)
+        self.cluster_addr_list = request["cluster_addr_list"]
+        self.__print_log(f"Updated cluster_addr_list: {self.cluster_addr_list}")
+        response = {"status": "success"}
         return json.dumps(response)
     
     # Client RPCs

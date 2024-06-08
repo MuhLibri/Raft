@@ -3,10 +3,7 @@ import os
 from lib.struct import Address
 from lib          import RaftNode
 from xmlrpc.server import SimpleXMLRPCServer
-from lib           import App
 from lib.struct    import KVStore
-
-
 
 def start_serving(addr: Address, contact_node_addr: Address, address_list: list[Address]):
     print(f"Starting Raft Server at {addr.ip}:{addr.port}")
@@ -47,23 +44,3 @@ if __name__ == "__main__":
         contact_addr = Address(sys.argv[3], int(sys.argv[4]))
 
     start_serving(server_addr, contact_addr, address_list)
-
-# def start_election(addr: Address, contact_node_addr: Address):
-#     raft_node = RaftNode(KVStore(), addr, contact_node_addr)
-#     raft_node.start_election()
-
-# if __name__ == "__main__":
-#     if len(sys.argv) < 3:
-#         print("Usage: server.py ip port [contact_ip] [contact_port] [start_election]")
-#         exit()
-
-#     contact_addr = None
-#     if len(sys.argv) >= 5:
-#         contact_addr = Address(sys.argv[3], int(sys.argv[4]))
-    
-#     server_addr = Address(sys.argv[1], int(sys.argv[2]))
-
-#     if len(sys.argv) == 6 and sys.argv[5] == "start_election":
-#         start_election(server_addr, contact_addr)
-#     else:
-#         start_serving(server_addr, contact_addr)

@@ -140,10 +140,10 @@ class RaftNode:
             # Check if all followers have acknowledged
             if func != "heartbeat":
                 if ack_count > len(self.cluster_addr_list) // 2:
-                    self.__print_log("All followers acknowledged the task")
+                    self.__print_log("Enough acks.")
                     return True
                 else:
-                    self.__print_log("Not all followers acknowledged the task")
+                    self.__print_log("Not enough acks.")
                     return False
             
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)

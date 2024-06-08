@@ -140,10 +140,10 @@ class RaftNode:
             # Check if all followers have acknowledged
             if func != "heartbeat":
                 if ack_count > len(self.cluster_addr_list) // 2:
-                    self.__print_log("Enough acks.")
+                    self.__print_log("Enough acks. Committing...")
                     return True
                 else:
-                    self.__print_log("Not enough acks.")
+                    self.__print_log("Not enough acks. Aborting...")
                     return False
             
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
@@ -329,7 +329,7 @@ class RaftNode:
             function_args = request.get("arguments", [])
             if hasattr(self, function_name):
                 function = getattr(self, function_name)
-                response = function(*function_args)
+                
                 if self.type == RaftNode.NodeType.LEADER:
                     result_event = threading.Event()
                     heartbeat_result = {"success": False}
@@ -353,6 +353,7 @@ class RaftNode:
                     result_event.wait()
 
                     if heartbeat_result["success"]:
+                        response = function(*function_args)
                         return json.dumps(response)
                     else:
                         return json.dumps({"error": "Failed to send task to followers"})

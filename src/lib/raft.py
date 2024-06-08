@@ -147,7 +147,32 @@ class RaftNode:
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
 
     
+    def get_leader(self) -> "json":
+        response = {
+            "status": "success", 
+            "addr_leader": {
+                "ip":   self.cluster_leader_addr.ip,
+                "port": self.cluster_leader_addr.port
+            }
+        }
+        return json.dumps(response)
+
+    def __try_to_get_leader(self, contact_addr: Address):
+        try:
+            response        = self.__send_request(None, "get_leader", contact_addr)
+            self.__print_log(f"Response: {response}")
+            if (response != None):
+                return Address(response['addr_leader']['ip'], response['addr_leader']['port'])
+            else:
+                self.__print_log(f"Error getting leader from {contact_addr}")
+                return None
+        
+        except ConnectionRefusedError:
+            self.__print_log(f"Connection refused to {contact_addr}")
+            return False
+
     def __try_to_apply_membership(self, contact_addr: Address) -> bool:
+        contact_addr = self.__try_to_get_leader(contact_addr)
         time.sleep(RaftNode.FOLLOWER_TIMEOUT_MAX / 1000)
         self.__print_log(f"Trying to apply membership to {contact_addr}")
         redirected_addr = contact_addr
@@ -163,16 +188,20 @@ class RaftNode:
             redirected_addr = Address(response["address"]["ip"], response["address"]["port"])
             try:
                 response        = self.__send_request(self.address, "apply_membership", redirected_addr)
+                if (response != None):
+                    self.log                 = response["log"]
+                    self.cluster_addr_list   = response["cluster_addr_list"]
+                    self.cluster_leader_addr = redirected_addr
+                    self.__print_log(f"Membership applied successfully. Cluster Leader: {self.cluster_leader_addr}")
+                    self.initialization()
+                    return True
+                else:
+                    self.__print_log(f"Error applying membership to {redirected_addr}")
+                    return False
+            
             except ConnectionRefusedError:
                 self.__print_log(f"Connection refused to {redirected_addr}")
                 return False
-        self.log                 = response["log"]
-        self.cluster_addr_list   = response["cluster_addr_list"]
-        self.cluster_leader_addr = redirected_addr
-        self.__print_log(f"Membership applied successfully. Cluster Leader: {self.cluster_leader_addr}")
-        self.initialization()
-
-        return True
 
     def __send_request(self, request: dict, rpc_name: str, addr: Address) -> "json":
         # Warning : This method is blocking
@@ -180,7 +209,7 @@ class RaftNode:
             node         = ServerProxy(f"http://{addr.ip}:{addr.port}")
             json_request = json.dumps(request)
             rpc_function = getattr(node, rpc_name)
-            response     = json.loads(rpc_function(json_request))
+            response     = json.loads(rpc_function(json_request)) if request else json.loads(rpc_function())
             self.__print_log(f"Request: {request}")
             self.__print_log(f"Response: {response}")
             return response

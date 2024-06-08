@@ -28,7 +28,7 @@ def read_address_list(filename: str) -> list[Address]:
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("Usage: server.py ip port [contact_ip] [contact_port]")
+        print("Usage: server.py [ip] [port] [contact_ip] [contact_port]")
         exit()
     # check the third argument, if third is address_list, then parse the address_list
     address_list : list[Address] = []
@@ -39,7 +39,8 @@ if __name__ == "__main__":
     if sys.argv[-1] != "membership":
         address_list = read_address_list("src\\address.txt")
     server_addr = Address(sys.argv[1], int(sys.argv[2]))
-    if len(sys.argv) == 6:
+    print(len(sys.argv))
+    if len(sys.argv) == 5:
         print("Contact Address:", sys.argv[3], sys.argv[4])
         contact_addr = Address(sys.argv[3], int(sys.argv[4]))
 

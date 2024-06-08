@@ -102,16 +102,19 @@ class RaftNode:
         self.heartbeat_thread = threading.Thread(target=asyncio.run, args=[self.__leader_heartbeat()])
         self.heartbeat_thread.start()
 
-    async def __leader_heartbeat(self):
+    async def __leader_heartbeat(self, func="heartbeat", args=None):
         while True:
-            self.__print_log("[Leader] Sending heartbeat...")
+            self.__print_log(f"[Leader] Sending {func}...")
             self.__print_log(f"Cluster Addr List: {self.cluster_addr_list}")
+            ack_count = 0
+            responses = []
+            
             for node_addr in self.cluster_addr_list:
                 if node_addr != self.address:
                     prev_log_index = len(self.log) - 1
                     prev_log_term = self.log[prev_log_index][0] if prev_log_index >= 0 else None
                     entries = [(self.election_term, f"entry-{len(self.log)}")]
-                    self.__print_log(f"[Leader] Sending heartbeat to {node_addr}")
+                    self.__print_log(f"[Leader] Sending {func} to {node_addr}")
                     response = self.__send_request({
                         "address": self.address,
                         "heartbeat": True,
@@ -119,13 +122,30 @@ class RaftNode:
                         "term": self.election_term,
                         "prev_log_index": prev_log_index,
                         "prev_log_term": prev_log_term,
-                        "entry": entries
-                    }, "heartbeat", node_addr)
+                        "entry": entries,
+                        "function_name": func,
+                        "arguments": args
+                    }, "heartbeat" if func == "heartbeat" else "follower_execute", node_addr)
+                    responses.append(response)
+                    
                     if response:
                         # Update match index based on response
-                        self.match_index[node_addr] = prev_log_index + len(entries)  
+                        self.match_index[node_addr] = prev_log_index + len(entries)
+                        if response.get("status") == "success":
+                            ack_count += 1
+                        
                     self.log.append(entries[0])
                     self.commit_index += 1
+            
+            # Check if all followers have acknowledged
+            if func != "heartbeat":
+                if ack_count == len(self.cluster_addr_list) - 1:
+                    self.__print_log("All followers acknowledged the task")
+                    return True
+                else:
+                    self.__print_log("Not all followers acknowledged the task")
+                    return False
+            
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
     
     def __try_to_apply_membership(self, contact_addr: Address) -> bool:
@@ -155,13 +175,12 @@ class RaftNode:
 
         return True
 
-    def __send_request(self, request: str, rpc_name: str, addr: Address) -> "json":
+    def __send_request(self, request: dict, rpc_name: str, addr: Address) -> "json":
         # Warning : This method is blocking
         try:
             node         = ServerProxy(f"http://{addr.ip}:{addr.port}")
             json_request = json.dumps(request)
             rpc_function = getattr(node, rpc_name)
-            self.__print_log(f"JSON Request: {json_request}")
             response     = json.loads(rpc_function(json_request))
             self.__print_log(f"Request: {request}")
             self.__print_log(f"Response: {response}")
@@ -215,7 +234,9 @@ class RaftNode:
     # Inter-node RPCs
     def heartbeat(self, json_request: str) -> "json":
         request = json.loads(json_request)
+
         self.__print_log(f"Received heartbeat from {request['address']}")
+        
         # reset timeout
         term = request['term']
         if term >= self.election_term:
@@ -235,11 +256,19 @@ class RaftNode:
         else:
             success = False
         
-        response = {
-            "success": success,
-            "term": self.election_term,
-            "match_index": len(self.log) - 1
-        }
+        if success:
+            response = {
+                "status": "success",
+                "term": self.election_term,
+                "match_index": len(self.log) - 1
+            }
+        else:
+            response = {
+                "status": "error",
+                "term": self.election_term,
+                "match_index": len(self.log) - 1
+            }
+
         return json.dumps(response)
     
     def append_entries(self, term, prev_log_index, prev_log_term, entry, commit_index):
@@ -300,11 +329,73 @@ class RaftNode:
             function_args = request.get("arguments", [])
             if hasattr(self, function_name):
                 function = getattr(self, function_name)
-                return function(*function_args)
+                response = function(*function_args)
+                if self.type == RaftNode.NodeType.LEADER:
+                    result_event = threading.Event()
+                    heartbeat_result = {"success": False}
+
+                    def run_asyncio_coroutine(coroutine, *args):
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        result = loop.run_until_complete(coroutine(*args))
+                        loop.close()
+                        return result
+
+                    def heartbeat_wrapper():
+                        success = run_asyncio_coroutine(self.__leader_heartbeat, function_name, function_args)
+                        heartbeat_result["success"] = success
+                        result_event.set()
+
+                    heartbeat_thread = threading.Thread(target=heartbeat_wrapper)
+                    heartbeat_thread.start()
+
+                    # Wait for the heartbeat thread to complete
+                    result_event.wait()
+
+                    if heartbeat_result["success"]:
+                        return json.dumps(response)
+                    else:
+                        return json.dumps({"error": "Failed to send task to followers"})
+                else:
+                    return json.dumps({"error": "Node is not a leader"})
             else:
-                return {"error": f"Function '{function_name}' not found in RaftNode class"}
+                return json.dumps({"error": f"Function '{function_name}' not found in RaftNode class"})
         else:
-            return {"error": "No function name provided in request"}
+            return json.dumps({"error": "No function name provided in request"})
+    
+    def follower_execute(self, json_request: str) -> "json":
+        request = json.loads(json_request)
+
+        self.__print_log(f"Received execute request from {request['address']}")
+        
+        success = self.append_entries(request['term'], request['prev_log_index'], request['prev_log_term'], request['entry'], request['commit_index'])
+
+        if success:
+            self.log.append(request['entry'][0])
+            self.commit_index += 1
+
+        function_name = request.get("function_name")
+        if function_name:
+            function_args = request.get("arguments", [])
+            if hasattr(self, function_name):
+                function = getattr(self, function_name)
+                function(*function_args)
+                self.reset_timeout()
+                self.__print_log(f"Executed task: {function_name}({', '.join(str(arg) for arg in function_args)})")
+                response = {
+                    "status": "success",
+                    "term": self.election_term,
+                    "match_index": len(self.log) - 1
+                }
+                return json.dumps(response)
+            else:
+                error_msg = f"Function '{function_name}' not found in RaftNode class"
+                self.__print_log(error_msg)
+                return json.dumps({"error": error_msg})
+        else:
+            error_msg = "No function name provided in request"
+            self.__print_log(error_msg)
+            return json.dumps({"error": error_msg})
     
     def ping(self) -> "json":
 

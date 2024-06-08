@@ -7,7 +7,6 @@ class App:
         self.store = store
         self.server = server
         self.server_addr = server_addr
-        self.max_retries = 3
 
     def execute_request(self, function_name, *args):
         if self.server:
@@ -22,6 +21,25 @@ class App:
                 return {"error": "Invalid response from server"}
         else:
             return {"error": "Server not available"}
+
+    def __call_method(self, method, *params):
+        while True:
+            try:
+                func = getattr(self.server, method)
+                return func(*params)
+            except xmlrpc.client.Fault as fault:
+                if fault.faultCode == 505:
+                    self.__handle_leader_redirect(fault.faultString)
+                else:
+                    return {"error": "Error connecting to " + fault.faultString}
+            except Exception as e:
+                return {"error": f"Error calling method {method}: {e}"}
+
+    def __handle_leader_redirect(self, leader_addr):
+        ip, port = leader_addr.split(':')
+        self.server_addr = Address(ip, int(port))
+        self.server = xmlrpc.client.ServerProxy(f"http://{self.server_addr.ip}:{self.server_addr.port}")
+        print(f"\nRedirecting to new leader at {leader_addr}\n")
 
     def handle_response(self, response):
         if isinstance(response, str):
@@ -41,36 +59,6 @@ class App:
                     print(f"{response['status']}\n")
         else:
             print(f"Error: Unexpected response type: {type(response)}\n")
-
-    def __call_method(self, method, *params):
-        retries = 0
-        while retries < self.max_retries:
-            try:
-                func = getattr(self.server, method)
-                return func(*params)
-            except xmlrpc.client.Fault as fault:
-                if fault.faultString.startswith("NOT_LEADER"):
-                    self.__handle_leader_redirect(fault, retries)
-                    retries += 1
-                else:
-                    print(f"Error calling method {method}: {fault.faultString}\n")
-                    return None
-            except AttributeError:
-                print(f"Method {method} not found on server.\n")
-                return None
-            except Exception as e:
-                print(f"Error calling method {method}: {e}\n")
-                return None
-        
-        print(f"Maximum retries ({self.max_retries}) exceeded for method {method}.\n")
-        return None
-
-    def __handle_leader_redirect(self, fault, retries):
-        new_leader = fault.faultString.split()[1]
-        ip, port = new_leader.split(':')
-        self.server_addr = Address(ip, int(port))
-        self.server = xmlrpc.client.ServerProxy(f"http://{self.server_addr.ip}:{self.server_addr.port}")
-        print(f"Redirecting to new leader at {new_leader}. Retry {retries}/{self.max_retries}.\n")
 
     def ping(self):
         response = self.execute_request("ping")

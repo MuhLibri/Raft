@@ -1,3 +1,4 @@
+import json
 import sys
 from xmlrpc.client import ServerProxy
 from lib.app import App
@@ -13,9 +14,18 @@ if __name__ == "__main__":
         print("Usage: client.py ip port")
         exit()
 
+    address_list : list[Address] = []
+
     server_addr = Address(sys.argv[1], int(sys.argv[2]))
-    with ServerProxy(f"http://{server_addr.ip}:{server_addr.port}") as server:
+    server = ServerProxy(f"http://{server_addr.ip}:{server_addr.port}")
+    try:
+        response = json.loads(server.connect())
+        for addr in response["list"]:
+            address_list.append(Address(addr["ip"], addr["port"]))
         app = App(KVStore(), server, server_addr)
+    except Exception as e:
+        print(f"Error connecting to server: please input an active server address\n")
+        exit()
     
     while True:
         command = input("Enter command: ").strip().split()
@@ -24,6 +34,15 @@ if __name__ == "__main__":
 
         cmd = command[0].lower()
         args = command[1:]
+
+        try:
+            response = json.loads(server.connect())
+            for addr in response["list"]:
+                address_list.append(Address(addr["ip"], addr["port"]))
+        except Exception as e:            
+            address_list = [addr for addr in address_list if addr.__str__ != app.server_addr.__str__]
+            app.server_addr = address_list[0]
+            app.server = ServerProxy(f"http://{app.server_addr.ip}:{app.server_addr.port}")
 
         if cmd == "ping":
             app.ping()

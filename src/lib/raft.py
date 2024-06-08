@@ -4,7 +4,7 @@ import random
 import socket
 import time
 import threading
-from xmlrpc.client import ServerProxy
+from xmlrpc.client import ServerProxy, Fault
 from typing        import List, Tuple, Dict
 from enum          import Enum
 from .struct       import Address
@@ -39,12 +39,19 @@ class RaftNode:
         self.match_index:         Dict[Address, int]    = {}
 
         if contact_addr is None:
-            self.__print_log(f"Cluster Addr List: {self.cluster_addr_list}")
+            self.__print_log(f"[Leader] Cluster Addr List: {self.cluster_addr_list}")
             self.initialization()
         else:
             self.cluster_addr_list.append(self.address)
             self.__try_to_apply_membership(contact_addr)
     
+    def connect(self) -> "json":
+        response = {
+            "list": self.cluster_addr_list
+        }
+        
+        return json.dumps(response)
+
     def random_timeout(self, min: int, max: int) -> int:
         return min + (max - min) * random.random()
     
@@ -105,7 +112,7 @@ class RaftNode:
     async def __leader_heartbeat(self, func="heartbeat", args=None):
         while True:
             self.__print_log(f"[Leader] Sending {func}...")
-            self.__print_log(f"Cluster Addr List: {self.cluster_addr_list}")
+            self.__print_log(f"[Leader] Cluster Addr List: {self.cluster_addr_list}")
             ack_count = 0
             responses = []
 
@@ -114,7 +121,7 @@ class RaftNode:
                     prev_log_index = len(self.log) - 1
                     prev_log_term = self.log[prev_log_index][0] if prev_log_index >= 0 else None
                     entries = [(self.election_term, f"entry-{len(self.log)}")]
-                    self.__print_log(f"[Leader] Sending {func} to {node_addr} with entries: {entries}")
+                    self.__print_log(f"[Leader] Sending {func} to {node_addr}")
                     
                     response = self.__send_request({
                         "log": self.log,
@@ -140,12 +147,19 @@ class RaftNode:
 
             # Ensure entries are committed if a majority of followers have acknowledged
             if ack_count > len(self.cluster_addr_list) // 2:
-                self.__print_log(f"Entries committed. Acknowledged by majority of followers.")
+                self.__print_log(f"[Leader] Entries committed. Acknowledged by majority of followers.")
                 self.log.append(entries[0])
                 self.commit_index += 1
+            else:
+                self.__print_log(f"[Leader] Entries not committed. Acknowledged by {ack_count} out of {len(self.cluster_addr_list)} followers.")
 
+            if func != "heartbeat":
+                if ack_count > len(self.cluster_addr_list) // 2:
+                    return True
+                else:
+                    return False
+                
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
-
     
     def get_leader(self) -> "json":
         response = {
@@ -210,8 +224,8 @@ class RaftNode:
             json_request = json.dumps(request)
             rpc_function = getattr(node, rpc_name)
             response     = json.loads(rpc_function(json_request)) if request else json.loads(rpc_function())
-            self.__print_log(f"Request: {request}")
-            self.__print_log(f"Response: {response}")
+            # self.__print_log(f"Request: {request}")
+            # self.__print_log(f"Response: {response}")
             return response
 
         except Exception as e: 
@@ -303,7 +317,6 @@ class RaftNode:
             }
 
         return json.dumps(response)
-
     
     def append_entries(self, term, prev_log_index, prev_log_term, entry, commit_index):
         if term < self.election_term:
@@ -319,7 +332,6 @@ class RaftNode:
             return True
         else:
             return False
-
 
     def request_vote(self, json_request: str) -> "json":
         request = json.loads(json_request)
@@ -392,7 +404,7 @@ class RaftNode:
                     else:
                         return json.dumps({"error": "Failed to send task to followers"})
                 else:
-                    return json.dumps({"error": "Node is not a leader"})
+                    raise Fault(505, f"{self.cluster_leader_addr}")
             else:
                 return json.dumps({"error": f"Function '{function_name}' not found in RaftNode class"})
         else:

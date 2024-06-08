@@ -1,5 +1,5 @@
-from struct.kvstore import KVStore
-from struct.address import Address
+from .struct import KVStore
+from .struct import Address
 import xmlrpc.client
 from typing import Any, Optional
 

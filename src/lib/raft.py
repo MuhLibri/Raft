@@ -25,13 +25,12 @@ class RaftNode:
         FOLLOWER  = 3
 
     # Public Raft Node methods
-    def __init__(self, store : KVStore, addr: Address, contact_addr: Address = None, address_list: List[Address] = []):
+    def __init__(self, application: Any, addr: Address, contact_addr: Address = None, address_list: List[Address] = []):
         socket.setdefaulttimeout(RaftNode.RPC_TIMEOUT)
         self.address:             Address           = addr
         self.type:                RaftNode.NodeType = RaftNode.NodeType.FOLLOWER
         self.log:                 List[Tuple[int, str]] = []
         self.app:                 Any               = application
-        self.store:               KVStore           = store
         self.election_term:       int               = 0
         self.cluster_addr_list:   List[Address]     = address_list
         self.cluster_leader_addr: Address           = None

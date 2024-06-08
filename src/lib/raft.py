@@ -3,13 +3,12 @@ import json
 import random
 import socket
 import time
-from threading     import Thread
+import threading
 from xmlrpc.client import ServerProxy
-from typing        import Any, List, Tuple, Dict
+from typing        import List, Tuple, Dict
 from enum          import Enum
 from .struct       import Address
 from .struct       import KVStore
-import threading
 
 class RaftNode:
     HEARTBEAT_INTERVAL   = 1
@@ -25,22 +24,21 @@ class RaftNode:
         FOLLOWER  = 3
 
     # Public Raft Node methods
-    def __init__(self, application: Any, addr: Address, contact_addr: Address = None, address_list: List[Address] = []):
+    def __init__(self, store: KVStore, addr: Address, contact_addr: Address = None, address_list: List[Address] = []):
         socket.setdefaulttimeout(RaftNode.RPC_TIMEOUT)
-        self.address:             Address           = addr
-        self.type:                RaftNode.NodeType = RaftNode.NodeType.FOLLOWER
+        self.address:             Address               = addr
+        self.type:                RaftNode.NodeType     = RaftNode.NodeType.FOLLOWER
         self.log:                 List[Tuple[int, str]] = []
-        self.app:                 Any               = application
-        self.election_term:       int               = 0
-        self.cluster_addr_list:   List[Address]     = address_list
-        self.cluster_leader_addr: Address           = None
-        self._stop_event                            = threading.Event()
-        self._lock                                  = threading.Lock()
-        self.commit_index:        int               = -1
-        self.match_index:         Dict[Address, int] = {}
+        self.store:               KVStore               = store
+        self.election_term:       int                   = 0
+        self.cluster_addr_list:   List[Address]         = address_list
+        self.cluster_leader_addr: Address               = None
+        self._stop_event                                = threading.Event()
+        self._lock                                      = threading.Lock()
+        self.commit_index:        int                   = -1
+        self.match_index:         Dict[Address, int]    = {}
 
         if contact_addr is None:
-             # self.cluster_addr_list.append(self.address)
             self.__print_log(f"Cluster Addr List: {self.cluster_addr_list}")
             self.initialization()
         else:
@@ -94,10 +92,9 @@ class RaftNode:
             if addr != self.address:
                 # Initialize match index for each follower
                 self.match_index[addr] = -1  
-        
-        # TODO : Inform to all node this is new leader
 
         request = {"cluster_leader_addr": self.address}
+
         for node_addr in self.cluster_addr_list:
             if node_addr != self.address:
                 self.__send_request(request, "notify_leader", node_addr)
@@ -157,10 +154,6 @@ class RaftNode:
         self.initialization()
 
         return True
-    
-    # # nyalain heartbeat
-        # self.heartbeat_thread = Thread(target=asyncio.run,args=[self.__follower_heartbeat()])
-        # self.heartbeat_thread.start()
 
     def __send_request(self, request: str, rpc_name: str, addr: Address) -> "json":
         # Warning : This method is blocking
@@ -198,8 +191,7 @@ class RaftNode:
     def start_election(self):
         self.__print_log("Starting election...")
         self.election_term += 1
-        # Vote for self
-        self.votes_received = 1  
+        self.votes_received = 1  # vote for self
         request = {"term": self.election_term, "candidate_id": self.address}
 
         for node_addr in self.cluster_addr_list:
@@ -248,24 +240,6 @@ class RaftNode:
             "term": self.election_term,
             "match_index": len(self.log) - 1
         }
-        return json.dumps(response)
-
-    def ping(self, json_request: str) -> "json":
-        request = json.loads(json_request)
-        self.__print_log(f"Received ping from {request['address']}")
-        success = self.append_entries(request['term'], request['prev_log_index'], request['prev_log_term'], request['entry'], request['commit_index'])
-        self.__print_log(request)
-        
-        if success:
-            self.log.append(request['entry'][0])
-            self.commit_index += 1
-            
-        response = {
-            "status": "success", 
-            "ping_response": "pong",
-            "address": {
-                "ip": self.address.ip, 
-                "port": self.address.port}}
         return json.dumps(response)
     
     def append_entries(self, term, prev_log_index, prev_log_term, entry, commit_index):

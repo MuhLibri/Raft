@@ -38,7 +38,10 @@ function sendCommand() {
         url = '/append';
         method = 'POST';
         body = JSON.stringify({ key: key.value, value: value.value });
+    } else if (commandSelect.value === 'strln') {
+        url = `/strln/${key.value}`;
     }
+    
 
     console.log(`Sending ${method} request to ${url} with body: ${body}`);
 
@@ -90,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (this.value === 'ping') {
             keyGroup.style.display = 'none';
             valueGroup.style.display = 'none';
-        } else if (this.value === 'get' || this.value === 'delete') {
+        } else if (this.value === 'get' || this.value === 'delete' || this.value === 'strln') {
             keyGroup.style.display = 'block';
             valueGroup.style.display = 'none';
         } else {

@@ -65,5 +65,10 @@ def append_value():
     response = rpc_app.append(key, value)
     return jsonify(response)
 
+@app.route('/strln/<key>', methods=['GET'])
+def strln(key):
+    response = rpc_app.strln(key)
+    return jsonify(response)
+
 if __name__ == '__main__':
     app.run(debug=True)

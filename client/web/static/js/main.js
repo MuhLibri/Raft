@@ -64,7 +64,7 @@ function sendCommand() {
     })
     .then(response => {
         loadingSpinner.style.display = 'none'; 
-        resultOutput.innerText = JSON.stringify(response, null, 2);
+        resultOutput.innerText = JSON.stringify(response, null, );
         serverOutput.innerText = `${response.server_ip?? ''}:${response.server_port?? ''}`;
         commandOutput.innerText = build_command_output(commandSelect.value, key.value, value.value);
     })

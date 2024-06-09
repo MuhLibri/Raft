@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minceraft Client Web</title>
+    <!-- Tautan ke Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="../static/css/style.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+
+<body class="bg-grey-100 w-full">
+    <div class="container mx-auto px-4 mt-8 w-full">
+        <h1 class="text-3xl font-semibold text-center mb-8">Mineraft Client Web</h1>
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <form id="rpc-form">
+                <div class="mb-4">
+                    <label for="command" class="block font-semibold mb-2">Command</label>
+                    <select id="command" class="w-full border py-2 px-3 rounded-lg">
+                        <option value="ping">Ping</option>
+                        <option value="get">Get</option>
+                        <option value="set">Set</option>
+                        <option value="delete">Delete</option>
+                        <option value="append">Append</option>
+                    </select>
+                </div>
+                
+                <div class="mb-4" id="key-group">
+                    <label for="key" class="block font-semibold mb-2">Key</label>
+                    <input type="text" id="key" class="w-full border py-2 px-3 rounded-lg" placeholder="Enter key...">
+                </div>
+                
+                <div class="mb-4" id="value-group">
+                    <label for="value" class="block font-semibold mb-2">Value</label>
+                    <input type="text" id="value" class="w-full border py-2 px-3 rounded-lg" placeholder="Enter value...">
+                </div>
+                
+                <button type="button" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg" onclick="sendCommand()">Submit</button>
+            </form>
+        </div>
+        
+        <div class="w-full mt-4 p-2 bg-yellow-50 border-2 border-solid rounded-sm shadow-md" id="response">
+            <p class="text-center text-yellow-800 font-semibold">Response</p>
+           
+            <table class="mt-4 w-full table-auto">
+                <tr>
+                    <td class="font-semibold w-24">Server:</td>
+                    <td id="server-info-out">~</td>
+                </tr>
+                <tr>
+                    <td class="font-semibold w-24">Command:</td>
+                    <td id="command-info-out">~</td>
+                </tr>
+                <tr>
+                    <td class="font-semibold w-24">Result:</td>
+                    <td id="result-info-out">~</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="mt-4 flex justify-center items-center" id="loading-spinner" style="display: none;">
+            <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+    </div>
+    <!-- Script untuk JavaScript kustom -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+
+</html>

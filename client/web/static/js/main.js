@@ -46,7 +46,7 @@ function sendCommand() {
     console.log(`Sending ${method} request to ${url} with body: ${body}`);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);  // 10 sec
+    const timeoutId = setTimeout(() => controller.abort(), 120000);  // 10 sec
 
     fetch(url, {
         method: method,

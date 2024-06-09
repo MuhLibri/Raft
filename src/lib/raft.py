@@ -235,6 +235,7 @@ class RaftNode:
             return response
 
         except Exception as e: 
+            self.__print_log(f"rpc_name: {rpc_name}")
             self.__print_log(f"Error: {e}")
             return None
     
@@ -247,7 +248,8 @@ class RaftNode:
             self.start_countdown(RaftNode.FOLLOWER_TIMEOUT_MIN, RaftNode.FOLLOWER_TIMEOUT_MAX)
         elif self.type == RaftNode.NodeType.CANDIDATE:
             # timeout candidate
-            # choose random from 150 ms to 300 ms
+            # self._election_thread = threading.Thread(target=self.start_election)
+            # self._election_thread.start()
             self.start_election()
             self.start_countdown(RaftNode.ELECTION_TIMEOUT_MIN, RaftNode.ELECTION_TIMEOUT_MAX)
         else:
@@ -274,7 +276,8 @@ class RaftNode:
                     self.votes_received += 1
 
         if self.votes_received > len(self.cluster_addr_list) // 2:
-            self.__print_log(f"self.votes_received: {self.votes_received}")
+            self.__print_log(f"cluster_addr_list: {self.cluster_addr_list}")
+            self.__print_log(f"self.votes_received: {self.votes_received} > {len(self.cluster_addr_list) // 2} = len(self.cluster_addr_list) // 2")
             self.__print_log(f"Server {self.address} is elected as leader")
             self.__initialize_as_leader()
             self.initialization()
@@ -284,7 +287,7 @@ class RaftNode:
         request = json.loads(json_request)
 
         self.__print_log(f"Received heartbeat from {request['address']}")
-        self.__print_log(f"Current cluster address list: {request['cluster_addr_list']}")
+        self.__print_log(f"Current cluster address list: {self.cluster_addr_list}")
         # Assign cluster_leader_addr
         # self.cluster_addr_list = request['cluster_addr_list']
 
@@ -352,6 +355,8 @@ class RaftNode:
             "vote_granted": vote_granted,
         }
         
+        self.__print_log(f"Responding to vote request: {response}")
+        
         return json.dumps(response)
 
     def notify_leader(self, json_request: str) -> "json":
@@ -369,10 +374,10 @@ class RaftNode:
         self.__print_log(f"Updated cluster_addr_list: {self.cluster_addr_list}")
 
         # apply updated cluster_addr_list to all nodes
-        for node_addr in self.cluster_addr_list:
-            if node_addr != self.address:
-                updated_cluster_request = {"cluster_addr_list": self.cluster_addr_list}
-                self.__send_request(updated_cluster_request, "update_cluster_addr_list", node_addr)
+        # make a new thread to apply updated cluster_addr_list to all nodes
+        self._cluster_update_thread = threading.Thread(target=self.leader_update_cluster_addr_list)
+        self._cluster_update_thread.start()
+
         
         response = {
             "status": "success", 
@@ -381,9 +386,17 @@ class RaftNode:
         
         return json.dumps(response)
     
+    def leader_update_cluster_addr_list(self):
+        for node_addr in self.cluster_addr_list:
+            if node_addr != self.address:
+                updated_cluster_request = {"cluster_addr_list": self.cluster_addr_list}
+                self.__send_request(updated_cluster_request, "update_cluster_addr_list", node_addr)
+        self.__print_log(f"Leader finished updating cluster_addr_list: {self.cluster_addr_list}")
+    
     def update_cluster_addr_list(self, json_request: str) -> "json":
         request = json.loads(json_request)
-        self.cluster_addr_list = request["cluster_addr_list"]
+        request_cluster_addr_list = request["cluster_addr_list"]
+        self.cluster_addr_list = [Address(addr["ip"], addr["port"]) for addr in request_cluster_addr_list]
         self.__print_log(f"Updated cluster_addr_list: {self.cluster_addr_list}")
         response = {"status": "success"}
         return json.dumps(response)

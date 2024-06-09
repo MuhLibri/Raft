@@ -544,3 +544,11 @@ class RaftNode:
             }
         
         return json.dumps(response)
+
+    def request_log(self) -> "json":
+        response = {
+            "status": "success",
+            "value": self.log
+        }
+
+        return json.dumps(response)

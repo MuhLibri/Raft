@@ -116,11 +116,12 @@ class RaftNode:
             ack_count = 1
             responses = []
 
+            prev_log_index = len(self.log) - 1
+            prev_log_term = self.log[prev_log_index][0] if prev_log_index >= 0 else None
+            entries = [(self.election_term, f"entry-{len(self.log)}")]
+
             for node_addr in self.cluster_addr_list:
                 if node_addr != self.address:
-                    prev_log_index = len(self.log) - 1
-                    prev_log_term = self.log[prev_log_index][0] if prev_log_index >= 0 else None
-                    entries = [(self.election_term, f"entry-{len(self.log)}")]
                     self.__print_log(f"[Leader] Sending {func} to {node_addr}")
 
                     # Apply leader cluster_addr_list to all followers
@@ -162,8 +163,9 @@ class RaftNode:
                     return True
                 else:
                     return False
-                
+
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
+
     
     def get_leader(self) -> "json":
         response = {

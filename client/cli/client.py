@@ -61,6 +61,8 @@ if __name__ == "__main__":
             app.append(args[0], str(args[1]))
         elif cmd == "append" and len(args) == 1:
             app.append(args[0], None)
+        elif cmd == "request_log":
+            app.request_log()
         elif cmd == "shutdown":
             shutdown()
             break

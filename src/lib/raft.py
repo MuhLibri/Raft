@@ -38,10 +38,12 @@ class RaftNode:
         self._lock                                      = threading.Lock()
         self.commit_index:        int                   = -1
         self.match_index:         Dict[Address, int]    = {}
+        self.countdown_thread:    threading.Thread      = threading.Thread(target=self.countdown)
+        self.countdown_thread.start()
 
         if contact_addr is None:
             self.__print_log(f"[Leader] Cluster Addr List: {self.cluster_addr_list}")
-            self.initialization()
+            # self.initialization()
         else:
             self.cluster_addr_list.append(self.address)
             self.__try_to_apply_membership(contact_addr)
@@ -61,34 +63,46 @@ class RaftNode:
             self.__print_log("Resetting timeout...")
             self._stop_event.set()  
     
-    def countdown(self, timeout_min, timeout_max) -> bool:
+    def countdown(self) -> bool:
         while True:
-            self._stop_event.clear()
-            with self._lock:
-                timeout = self.random_timeout(timeout_min, timeout_max)
-            start_timer = time.time()
-            self.__print_log(f"Starting timeout: {timeout} ms")
-            while time.time() < start_timer + timeout / 1000:
-                if self._stop_event.is_set():
-                    break
-                milis = (start_timer + timeout / 1000 - time.time()) * 1000
-                secs, milis = divmod(milis, 1000)
-                timer = '{:02d}:{:02d}'.format(int(secs), int(milis))
-                self.__print_log(f"Timeout: {timer}", end="\r")
-                time.sleep(0.1)
-            if not self._stop_event.is_set():
-                break
-        if self.type == RaftNode.NodeType.FOLLOWER:
-            self.__print_log("Follower timeout. Be a candidate...")
-            self.type = RaftNode.NodeType.CANDIDATE
-        self.initialization()
+            if self.type != RaftNode.NodeType.LEADER:
+                self._stop_event.clear()
+                with self._lock:
+                    if self.type == RaftNode.NodeType.FOLLOWER:
+                        timeout = self.random_timeout(RaftNode.FOLLOWER_TIMEOUT_MIN, RaftNode.FOLLOWER_TIMEOUT_MAX)
+                    else:
+                        timeout = self.random_timeout(RaftNode.ELECTION_TIMEOUT_MIN, RaftNode.ELECTION_TIMEOUT_MAX)
+                start_timer = time.time()
+                self.__print_log(f"Starting timeout: {timeout} ms")
+                while time.time() < start_timer + timeout / 1000:
+                    if self._stop_event.is_set():
+                        break
+                    milis = (start_timer + timeout / 1000 - time.time()) * 1000
+                    secs, milis = divmod(milis, 1000)
+                    timer = '{:02d}:{:02d}'.format(int(secs), int(milis))
+                    self.__print_log(f"Timeout: {timer}", end="\r")
+                    time.sleep(0.1)
+                if not self._stop_event.is_set():
+                    if self.type == RaftNode.NodeType.FOLLOWER:
+                        self.__print_log("Follower timeout. Be a candidate...")
+                        self.type = RaftNode.NodeType.CANDIDATE
+                    else:
+                        self.__print_log("Candidate timeout. Restart election...")
+                        self.start_election()
+                
+        #     if not self._stop_event.is_set():
+        #         break
+        # if self.type == RaftNode.NodeType.FOLLOWER:
+        #     self.__print_log("Follower timeout. Be a candidate...")
+        #     self.type = RaftNode.NodeType.CANDIDATE
+        # self.initialization()
 
-    def start_countdown(self, timeout_countdown_min, timeout_countdown_max):
-        self._thread = threading.Thread(target=self.countdown, args=(timeout_countdown_min, timeout_countdown_max))
-        if self._thread.is_alive():
-            self._thread.join()
-        else:
-            self._thread.start()
+    # def start_countdown(self, timeout_countdown_min, timeout_countdown_max):
+    #     self._thread = threading.Thread(target=self.countdown, args=(timeout_countdown_min, timeout_countdown_max))
+    #     if self._thread.is_alive():
+    #         self._thread.join()
+    #     else:
+    #         self._thread.start()
 
     # Internal Raft Node methods
     def __print_log(self, text: str, end='\n'):
@@ -217,7 +231,7 @@ class RaftNode:
                     self.cluster_addr_list   = response["cluster_addr_list"]
                     self.cluster_leader_addr = redirected_addr
                     self.__print_log(f"Membership applied successfully. Cluster Leader: {self.cluster_leader_addr}")
-                    self.initialization()
+                    # self.initialization()
                     return True
                 else:
                     self.__print_log(f"Error applying membership to {redirected_addr}")
@@ -243,23 +257,23 @@ class RaftNode:
             self.__print_log(f"Error: {e}")
             return None
     
-    def initialization(self):
-        # switch case for node type
-        if self.type == RaftNode.NodeType.FOLLOWER:
-            # timeout follower
-            self.__print_log("Starting timeout follower...")
-            # random from follower timeout min to follower timeout max
-            self.start_countdown(RaftNode.FOLLOWER_TIMEOUT_MIN, RaftNode.FOLLOWER_TIMEOUT_MAX)
-        elif self.type == RaftNode.NodeType.CANDIDATE:
-            # timeout candidate
-            # self._election_thread = threading.Thread(target=self.start_election)
-            # self._election_thread.start()
-            self.start_election()
-            self.start_countdown(RaftNode.ELECTION_TIMEOUT_MIN, RaftNode.ELECTION_TIMEOUT_MAX)
-        else:
-            # stop countdown
-            self.__print_log("Stopping countdown...")
-            self._stop_event.set()
+    # def initialization(self):
+    #     # switch case for node type
+    #     if self.type == RaftNode.NodeType.FOLLOWER:
+    #         # timeout follower
+    #         self.__print_log("Starting timeout follower...")
+    #         # random from follower timeout min to follower timeout max
+    #         self.start_countdown(RaftNode.FOLLOWER_TIMEOUT_MIN, RaftNode.FOLLOWER_TIMEOUT_MAX)
+    #     elif self.type == RaftNode.NodeType.CANDIDATE:
+    #         # timeout candidate
+    #         # self._election_thread = threading.Thread(target=self.start_election)
+    #         # self._election_thread.start()
+    #         self.start_election()
+    #         self.start_countdown(RaftNode.ELECTION_TIMEOUT_MIN, RaftNode.ELECTION_TIMEOUT_MAX)
+    #     else:
+    #         # stop countdown
+    #         self.__print_log("Stopping countdown...")
+    #         self._stop_event.set()
     
     def start_election(self):
         self.__print_log("Starting election...")
@@ -284,7 +298,7 @@ class RaftNode:
             self.__print_log(f"self.votes_received: {self.votes_received} > {len(self.cluster_addr_list) // 2} = len(self.cluster_addr_list) // 2")
             self.__print_log(f"Server {self.address} is elected as leader")
             self.__initialize_as_leader()
-            self.initialization()
+            # self.initialization()
     
     # Inter-node RPCs
     def heartbeat(self, json_request: str) -> "json":

@@ -3,10 +3,17 @@ import json
 import xmlrpc.client
 from lib.app import App
 from lib.struct import Address
+import sys
 
 app = Flask(__name__)
 
-server_addr = Address("localhost", 8000) 
+if len(sys.argv) < 3:
+        print("Usage: client.py ip port")
+        print("ip: server ip address")
+        print("port: server port number")
+        exit()
+
+server_addr = Address(sys.argv[1], int(sys.argv[2]))
 server = xmlrpc.client.ServerProxy(f"http://{server_addr.ip}:{server_addr.port}")
 rpc_app = App(server, server_addr)
 

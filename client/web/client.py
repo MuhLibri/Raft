@@ -15,7 +15,18 @@ if len(sys.argv) < 3:
 
 server_addr = Address(sys.argv[1], int(sys.argv[2]))
 server = xmlrpc.client.ServerProxy(f"http://{server_addr.ip}:{server_addr.port}")
+address_list : list[Address] = []
+
+try:
+    response = json.loads(server.connect())
+    for addr in response["list"]:
+        address_list.append(Address(addr["ip"], addr["port"]))
+except Exception as e:
+    print(f"Error connecting to server: please input an active server address\n")
+    exit()
+
 rpc_app = App(server, server_addr)
+rpc_app.server_addr_list = address_list
 
 @app.route('/')
 def index():

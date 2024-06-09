@@ -48,6 +48,7 @@ def delete_value(key):
 @app.route('/append', methods=['POST'])
 def append_value():
     data = request.json
+    print("data", data)
     key = data.get('key')
     value = data.get('value')
     response = rpc_app.append(key, value)

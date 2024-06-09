@@ -1,6 +1,4 @@
 /* Input text value */
-const key = document.getElementById('key');
-const value = document.getElementById('value');
 
 /* Input */
 const commandSelect = document.getElementById('command');
@@ -19,6 +17,9 @@ const keyGroup = document.getElementById('key-group');
 
 function sendCommand() {
     loadingSpinner.style.display = 'block';  // Show spinner before sending the request
+    const key = document.getElementById('key').value;
+    const value = document.getElementById('value').value;
+
 
     let url = '';
     let method = 'GET';
@@ -39,6 +40,7 @@ function sendCommand() {
         url = '/append';
         method = 'POST';
         body = JSON.stringify({ key: key, value: value });
+        console.log(body);
     }
 
     console.log(`Sending ${method} request to ${url} with body: ${body}`);
@@ -55,13 +57,13 @@ function sendCommand() {
         loadingSpinner.style.display = 'none';  // Hide spinner on success
         resultOutput.innerText = JSON.stringify(response, null, 1);
         serverOutput.innerText = `${response.server_ip}:${response.server_port}`;
-        commandOutput.innerText = build_command_output(commandSelect.value, key.value, value.value);
+        commandOutput.innerText = build_command_output(commandSelect.value, key, value);
     })
     .catch(error => {
         loadingSpinner.style.display = 'none';  // Hide spinner on error
         resultOutput.innerText = `Error: ${error}`;
         serverOutput.innerText = '';
-        commandOutput.innerText = build_command_output(commandSelect.value, key.value, value.value);
+        commandOutput.innerText = build_command_output(commandSelect.value, key, value);
     });
 }
 

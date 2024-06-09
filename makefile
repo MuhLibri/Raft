@@ -1,5 +1,5 @@
 SERVER_PATH = src/server.py
-CLIENT_PATH = src/client.py
+# CLIENT_PATH = src/client.py
 CLIENT_CLI_PATH = client/cli/client.py
 CLIENT_WEB_PATH = client/web/client.py
 
@@ -15,9 +15,9 @@ run-server:
 	@echo "Running the server"
 	python $(SERVER_PATH) $(IP) $(PORT)
 
-run-client:
-	@echo "Running the client"
-	python $(CLIENT_PATH) $(IP) $(PORT)
+# run-client:
+# 	@echo "Running the client"
+# 	python $(CLIENT_PATH) $(IP) $(PORT)
 
 run-client-cli:
 	@echo "Running the client"

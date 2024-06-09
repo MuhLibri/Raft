@@ -92,6 +92,7 @@ function build_command_output(command, key = null, value = null) {
 
 document.addEventListener('DOMContentLoaded', function() {
     commandSelect.addEventListener('change', function() {
+        console.log('Command changed:', this.value);
         if (this.value === 'ping' || this.value === 'request-log') {
             keyGroup.style.display = 'none';
             valueGroup.style.display = 'none';

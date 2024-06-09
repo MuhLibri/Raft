@@ -129,3 +129,7 @@ class App:
     def append(self, key, value):
         response = self.execute_request("append", key, value)
         return self.handle_response(response)
+    
+    def request_log(self):
+        response = self.execute_request("request_log")
+        return self.handle_response(response)

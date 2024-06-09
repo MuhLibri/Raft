@@ -70,5 +70,10 @@ def strln(key):
     response = rpc_app.strln(key)
     return jsonify(response)
 
+@app.route('/request_log', methods=['GET'])
+def request_log():
+    response = rpc_app.request_log()
+    return jsonify(response)
+
 if __name__ == '__main__':
     app.run(debug=True)

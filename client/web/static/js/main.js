@@ -25,6 +25,8 @@ function sendCommand() {
 
     if (commandSelect.value === 'ping') {
         url = '/ping';
+    } else if (commandSelect.value === 'request-log') {
+        url = '/request_log';
     } else if (commandSelect.value === 'get') {
         url = `/get/${key.value}`;
     } else if (commandSelect.value === 'set') {
@@ -90,7 +92,7 @@ function build_command_output(command, key = null, value = null) {
 
 document.addEventListener('DOMContentLoaded', function() {
     commandSelect.addEventListener('change', function() {
-        if (this.value === 'ping') {
+        if (this.value === 'ping' || this.value === 'request-log') {
             keyGroup.style.display = 'none';
             valueGroup.style.display = 'none';
         } else if (this.value === 'get' || this.value === 'delete' || this.value === 'strln') {

@@ -29,7 +29,7 @@ if "%1" == "membership" (
         echo Starting server with address %%i:%%j and contact %FIRST_ADDRESS%
         start cmd /k python src\server.py %%i %%j %FIRST_ADDRESS% membership
     )
-    exit /b
+    goto :start_client
 ) else (
     REM Default behavior
     REM Start the Raft servers with addresses from the file
@@ -40,6 +40,20 @@ if "%1" == "membership" (
         start cmd /k python src\server.py %%i %%j !ADDRESSES!
         @REM goto end
     )
+    goto :start_client
 )
+
+:start_client
+REM Get the first address from the list for the client
+for /f "tokens=1,2" %%i in (src\address.txt) do (
+    set CLIENT_ADDRESS=%%i %%j
+    goto :run_client
+)
+
+:run_client
+REM Start the client with the first address
+echo Starting client, connecting to %CLIENT_ADDRESS%
+start cmd /k python src\client.py %CLIENT_ADDRESS%
+exit /b
 
 :end

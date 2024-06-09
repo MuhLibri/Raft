@@ -53,7 +53,7 @@ for /f "tokens=1,2" %%i in (src\address.txt) do (
 :run_client
 REM Start the client with the first address
 echo Starting client, connecting to %CLIENT_ADDRESS%
-start cmd /k python src\client.py %CLIENT_ADDRESS%
+start cmd /k python client\cli\client.py %CLIENT_ADDRESS%
 exit /b
 
 :end

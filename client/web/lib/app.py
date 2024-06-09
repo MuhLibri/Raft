@@ -22,9 +22,14 @@ class App:
                 else:
                     return response
             except json.JSONDecodeError:
-                return {"error": "Invalid response from server"}
+                return {"error": "Invalid response from server",
+                        "server_ip": self.server_addr.ip,
+                        "server_port": self.server_addr.port
+                        }
         else:
-            return {"error": "Server not available"}
+            return {"error": "Server not available",
+                    "server_ip": self.server_addr.ip,
+                    "server_port": self.server_addr.port}
 
     def __call_method(self, method, *params):
         while True:
@@ -43,9 +48,13 @@ class App:
                 if fault.faultCode == 505:
                     self.handle_leader_redirect(fault.faultString)
                 else:
-                    return {"error": "Error connecting to " + fault.faultString}
+                    return {"error": "Error connecting to " + fault.faultString,
+                            "server_ip": self.server_addr.ip,
+                            "server_port": self.server_addr.port}
             except Exception as e:
-                return {"error": f"Error calling method {method}: {e}"}
+                return {"error": f"Error calling method {method}: {e}",
+                        "server_ip": self.server_addr.ip,
+                        "server_port": self.server_addr.port}
 
     def handle_leader_redirect(self, leader_addr):
         ip, port = leader_addr.split(':')
@@ -61,12 +70,14 @@ class App:
                 response = json.loads(response)
             except json.JSONDecodeError:
                 print(f"Error: Invalid response format: {response}\n")
-                return {"error": "Invalid response format"}
+                return {"error": "Invalid response format",
+                        "server_ip": self.server_addr.ip,
+                        "server_port": self.server_addr.port}
 
         if isinstance(response, dict):
             if "error" in response:
                 print(f"Error: {response['error']}\n")
-                return response  # Mengembalikan respons jika terdapat error
+                
             else:
                 if "value" in response:
                     print(f"{response['value']}\n")
@@ -89,7 +100,9 @@ class App:
                 response = json.loads(response)
             except json.JSONDecodeError:
                 print(f"Error: Invalid response format: {response}\n")
-                return {"error": "Invalid response format"}
+                return {"error": "Invalid response format",
+                        "server_ip": self.server_addr.ip,
+                        "server_port": self.server_addr.port}
         
         return response.update({"server_ip": self.server_addr.ip, "server_port": self.server_addr.port})
 

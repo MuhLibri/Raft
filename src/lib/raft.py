@@ -12,10 +12,10 @@ from .struct       import KVStore
 
 class RaftNode:
     HEARTBEAT_INTERVAL   = 1
-    ELECTION_TIMEOUT_MIN = 1000
-    ELECTION_TIMEOUT_MAX = 2000
-    FOLLOWER_TIMEOUT_MIN = 500
-    FOLLOWER_TIMEOUT_MAX = 1000
+    ELECTION_TIMEOUT_MIN = 3000
+    ELECTION_TIMEOUT_MAX = 5000
+    FOLLOWER_TIMEOUT_MIN = 2000
+    FOLLOWER_TIMEOUT_MAX = 3000
     RPC_TIMEOUT          = 0.5
     
     class NodeType(Enum):
@@ -122,6 +122,10 @@ class RaftNode:
                     prev_log_term = self.log[prev_log_index][0] if prev_log_index >= 0 else None
                     entries = [(self.election_term, f"entry-{len(self.log)}")]
                     self.__print_log(f"[Leader] Sending {func} to {node_addr}")
+
+                    # Apply leader cluster_addr_list to all followers
+                    updated_cluster_request = {"cluster_addr_list": self.cluster_addr_list}
+                    self.__send_request(updated_cluster_request, "update_cluster_addr_list", node_addr)
                     
                     response = self.__send_request({
                         "log": self.log,
@@ -362,16 +366,11 @@ class RaftNode:
         self.cluster_addr_list.append(Address(request["ip"], request["port"]))
         self.__print_log(f"Updated cluster_addr_list: {self.cluster_addr_list}")
 
-        # Apply leader cluster list to all nodes
-        for node_addr in self.cluster_addr_list:
-            if node_addr != self.address:
-                updated_cluster_request = {"cluster_addr_list": self.cluster_addr_list}
-                self.__send_request(updated_cluster_request, "update_cluster_addr_list", node_addr)
-
         response = {
             "status": "success", 
             "log": self.log, 
             "cluster_addr_list": self.cluster_addr_list}
+        
         return json.dumps(response)
     
     def update_cluster_addr_list(self, json_request: str) -> "json":

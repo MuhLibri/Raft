@@ -1,4 +1,5 @@
 SERVER_PATH = src/server.py
+CLIENT_PATH = src/client.py
 
 run:
 	@echo "Running the program"

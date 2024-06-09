@@ -1,3 +1,4 @@
+import sys
 import asyncio
 import json
 import random
@@ -16,7 +17,7 @@ class RaftNode:
     ELECTION_TIMEOUT_MAX = 4000
     FOLLOWER_TIMEOUT_MIN = 1000
     FOLLOWER_TIMEOUT_MAX = 2000
-    RPC_TIMEOUT          = 0.5
+    RPC_TIMEOUT          = 1
     
     class NodeType(Enum):
         LEADER    = 1
@@ -73,7 +74,7 @@ class RaftNode:
                 milis = (start_timer + timeout / 1000 - time.time()) * 1000
                 secs, milis = divmod(milis, 1000)
                 timer = '{:02d}:{:02d}'.format(int(secs), int(milis))
-                self.__print_log(f"Timeout: {timer}", end='\r')
+                self.__print_log(f"Timeout: {timer}", end="\r")
                 time.sleep(0.1)
             if not self._stop_event.is_set():
                 break
@@ -84,7 +85,10 @@ class RaftNode:
 
     def start_countdown(self, timeout_countdown_min, timeout_countdown_max):
         self._thread = threading.Thread(target=self.countdown, args=(timeout_countdown_min, timeout_countdown_max))
-        self._thread.start()
+        if self._thread.is_alive():
+            self._thread.join()
+        else:
+            self._thread.start()
 
     # Internal Raft Node methods
     def __print_log(self, text: str, end='\n'):
@@ -110,7 +114,7 @@ class RaftNode:
         self.heartbeat_thread.start()
 
     async def __leader_heartbeat(self, func="heartbeat", args=None):
-        while True:
+        while (self.type == RaftNode.NodeType.LEADER):
             self.__print_log(f"[Leader] Sending {func}...")
             self.__print_log(f"[Leader] Cluster Addr List: {self.cluster_addr_list}")
             ack_count = 1
@@ -269,7 +273,7 @@ class RaftNode:
                 response = self.__send_request(request, "request_vote", node_addr)
                 if response == None:
                     # erase node from cluster_addr_list
-                    self.cluster_addr_list.remove(node_addr)
+                    # self.cluster_addr_list.remove(node_addr)
                     continue
                 if response["vote_granted"]:
                     self.__print_log(f"Server {self.address} received vote from {node_addr}")
@@ -295,6 +299,9 @@ class RaftNode:
         term = request['term']
         if term >= self.election_term:
             self.reset_timeout()
+            if (self.type == RaftNode.NodeType.LEADER):
+                self.type = RaftNode.NodeType.FOLLOWER
+                # self.initialization()
             self.type = RaftNode.NodeType.FOLLOWER
             entries = request['entry']
             prev_log_index = request['prev_log_index']
@@ -347,6 +354,9 @@ class RaftNode:
         vote_granted = False
         if request["term"] > self.election_term:
             self.election_term = request["term"]
+            if (self.type == RaftNode.NodeType.LEADER):
+                self.type = RaftNode.NodeType.FOLLOWER
+                # self.initialization()
             self.type          = RaftNode.NodeType.FOLLOWER
             vote_granted       = True
             
@@ -402,7 +412,7 @@ class RaftNode:
         return json.dumps(response)
     
     # Client RPCs
-    def execute(self, json_request: str) -> "json":
+    def execute(self, json_request: str) -> str:
         request = json.loads(json_request)
         function_name = request.get("function_name")
         if function_name:
@@ -415,6 +425,8 @@ class RaftNode:
                     heartbeat_result = {"success": False}
 
                     def run_asyncio_coroutine(coroutine, *args):
+                        if sys.platform == 'win32':
+                            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
                         loop = asyncio.new_event_loop()
                         asyncio.set_event_loop(loop)
                         result = loop.run_until_complete(coroutine(*args))
@@ -422,9 +434,11 @@ class RaftNode:
                         return result
 
                     def heartbeat_wrapper():
-                        success = run_asyncio_coroutine(self.__leader_heartbeat, function_name, function_args)
-                        heartbeat_result["success"] = success
-                        result_event.set()
+                        try:
+                            success = run_asyncio_coroutine(self.__leader_heartbeat, function_name, function_args)
+                            heartbeat_result["success"] = success
+                        finally:
+                            result_event.set()
 
                     heartbeat_thread = threading.Thread(target=heartbeat_wrapper)
                     heartbeat_thread.start()
@@ -443,6 +457,7 @@ class RaftNode:
                 return json.dumps({"error": f"Function '{function_name}' not found in RaftNode class"})
         else:
             return json.dumps({"error": "No function name provided in request"})
+
     
     def follower_execute(self, json_request: str) -> "json":
         request = json.loads(json_request)

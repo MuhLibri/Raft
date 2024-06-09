@@ -18,6 +18,7 @@ if __name__ == "__main__":
 
     server_addr = Address(sys.argv[1], int(sys.argv[2]))
     server = ServerProxy(f"http://{server_addr.ip}:{server_addr.port}")
+    
     try:
         response = json.loads(server.connect())
         for addr in response["list"]:

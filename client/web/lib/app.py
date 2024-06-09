@@ -4,8 +4,10 @@ from .struct import Address
 
 class App:
     def __init__(self, server=None, server_addr=None):
-        self.server: xmlrpc.client.S = server
+        self.server: xmlrpc.client.ServerProxy = server
         self.server_addr: Address = server_addr
+        self.server_addr_list: list[Address] = []
+        self.server_addr_list.append(server_addr)
 
     def execute_request(self, function_name, *args):
         if self.server:
@@ -27,6 +29,14 @@ class App:
     def __call_method(self, method, *params):
         while True:
             try:
+                try:
+                    response = json.loads(self.server.connect())
+                    for addr in response["list"]:
+                        self.server_addr_list.append(Address(addr["ip"], addr["port"]))
+                except Exception as e:
+                    self.server_addr_list.remove(self.server_addr)
+                    self.handle_leader_redirect(self.server_addr_list[0].__str__())
+                    
                 func = getattr(self.server, method)
                 return func(*params)
             except xmlrpc.client.Fault as fault:
@@ -41,6 +51,8 @@ class App:
         ip, port = leader_addr.split(':')
         self.server_addr = Address(ip, int(port))
         self.server = xmlrpc.client.ServerProxy(f"http://{self.server_addr.ip}:{self.server_addr.port}")
+        if self.server_addr not in self.server_addr_list:
+            self.server_addr_list.append(self.server_addr)
         print(f"\nRedirecting to new leader at {leader_addr}\n")
 
     def handle_response(self, response) -> dict:
